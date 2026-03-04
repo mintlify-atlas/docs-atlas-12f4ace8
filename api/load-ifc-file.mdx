@@ -1,0 +1,370 @@
+---
+title: LoadIfcFile
+description: Component for loading and processing IFC building model files
+---
+
+## Overview
+
+The `LoadIfcFile` component handles loading IFC (Industry Foundation Classes) files, extracting building element properties, and preparing data for AI analysis. It integrates with the `@thatopen/components` FragmentsManager and the ChatGpt component.
+
+## Class Definition
+
+```typescript
+export class LoadIfcFile extends OBC.Component {
+  enabled: boolean = true;
+  static uuid = OBC.UUID.create();
+  gpt: ChatGpt;
+
+  constructor(components: OBC.Components) {
+    super(components);
+    components.add(LoadIfcFile.uuid, this);
+    this.gpt = components.get(ChatGpt);
+  }
+}
+```
+
+**Location**: `src/bim-components/LoadIfc/index.ts:12`
+
+## Properties
+
+<ParamField path="enabled" type="boolean" default="true">
+  Flag indicating whether the component is active
+</ParamField>
+
+<ParamField path="uuid" type="string" required>
+  Dynamically generated UUID identifier for the component instance
+</ParamField>
+
+<ParamField path="gpt" type="ChatGpt" required>
+  Reference to the ChatGpt component for storing extracted IFC data
+</ParamField>
+
+## Type Definitions
+
+```typescript
+type IfcFileData = {
+  fileAsString: string,
+}
+```
+
+**Location**: `src/bim-components/LoadIfc/index.ts:8`
+
+## Methods
+
+### loadFile
+
+Loads an IFC file, processes it, and adds the model to the 3D scene.
+
+```typescript
+async loadFile(file: File | null, world: OBC.SimpleWorld): Promise<void>
+```
+
+**Location**: `src/bim-components/LoadIfc/index.ts:63`
+
+<ParamField path="file" type="File | null" required>
+  The IFC file to load. If null, displays an alert and returns early.
+</ParamField>
+
+<ParamField path="world" type="OBC.SimpleWorld" required>
+  The 3D world/scene where the loaded model will be added
+</ParamField>
+
+<ResponseField name="return" type="Promise<void>">
+  Promise that resolves when the file is loaded and processed
+</ResponseField>
+
+**Implementation Details**:
+
+```typescript
+async loadFile(file: File | null, world: OBC.SimpleWorld) {
+  const fragmentLoader = this.components.get(OBC.IfcLoader);
+  const gpt = this.components.get(ChatGpt);
+  
+  if (file === null) {
+    alert("Please select ifc file");
+    return;
+  }
+  
+  // Read file as text for GPT analysis
+  const reader = new FileReader();
+  let fileCOntent: string = "";
+  reader.onload = function(event) {
+    const myData = event.target?.result;
+    if (typeof myData === "string") {
+      fileCOntent = myData;
+      gpt.fileData = myData;
+    }
+  };
+  reader.readAsText(file);
+  
+  // Load file as fragments for 3D visualization
+  const fileAsArray = await file.arrayBuffer();
+  const buffer = new Uint8Array(fileAsArray);
+  const model = await fragmentLoader.load(buffer);
+  model.name = "example";
+  
+  // Extract material data
+  const material = await this.AddIfcFileDataToGenerallString(
+    model, 
+    WEBIFC.IFCMATERIAL
+  );
+  
+  // Add model to scene
+  world.scene.three.add(model);
+}
+```
+
+**Source**: `src/bim-components/LoadIfc/index.ts:63-107`
+
+**Example Usage**:
+
+```typescript
+const loadIfc = components.get(LoadIfcFile);
+
+const fileInput = document.createElement("input");
+fileInput.type = "file";
+fileInput.accept = ".ifc";
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  await loadIfc.loadFile(file, world);
+});
+```
+
+### AddIfcFileDataToGenerallString
+
+Extracts properties of specific IFC element types and their relationships, returning them as a JSON string.
+
+```typescript
+AddIfcFileDataToGenerallString = async (
+  model: FragmentsGroup,
+  type: number,
+  backupType?: number
+): Promise<string | undefined>
+```
+
+**Location**: `src/bim-components/LoadIfc/index.ts:23`
+
+<ParamField path="model" type="FragmentsGroup" required>
+  The loaded IFC model containing building data
+</ParamField>
+
+<ParamField path="type" type="number" required>
+  IFC entity type number (e.g., `WEBIFC.IFCWALL`, `WEBIFC.IFCMATERIAL`)
+</ParamField>
+
+<ParamField path="backupType" type="number">
+  Optional fallback type to use if the primary type returns no results (e.g., use `WEBIFC.IFCWALLSTANDARDCASE` if `WEBIFC.IFCWALL` is empty)
+</ParamField>
+
+<ResponseField name="return" type="Promise<string | undefined>">
+  JSON string containing serialized properties of all elements of the specified type, including:
+  - Element properties
+  - Building storey (level) information
+  - Property sets (IFCPROPERTYSET)
+  - Element quantities (IFCELEMENTQUANTITY)
+</ResponseField>
+
+**Process Flow**:
+
+1. Retrieves all properties of the specified type from the model
+2. For each element:
+   - Serializes the element properties to JSON
+   - Finds the building storey containing the element
+   - Extracts property sets and quantities via relations
+   - Concatenates all data into a single string
+
+**Example**:
+
+```typescript
+const loadIfc = components.get(LoadIfcFile);
+const model = await fragmentLoader.load(buffer);
+
+// Extract wall data with fallback to standard case
+const wallData = await loadIfc.AddIfcFileDataToGenerallString(
+  model,
+  WEBIFC.IFCWALL,
+  WEBIFC.IFCWALLSTANDARDCASE
+);
+
+// Extract slab data
+const slabData = await loadIfc.AddIfcFileDataToGenerallString(
+  model,
+  WEBIFC.IFCSLAB
+);
+
+// Extract beam data
+const beamData = await loadIfc.AddIfcFileDataToGenerallString(
+  model,
+  WEBIFC.IFCBEAM
+);
+```
+
+**Implementation Details**:
+
+```typescript
+const indexer = this.components.get(OBC.IfcRelationsIndexer);
+let generallString: string = "";
+
+let wallsData = await model.getAllPropertiesOfType(type);
+if (!wallsData && backupType) {
+  wallsData = await model.getAllPropertiesOfType(backupType);
+}
+
+if (wallsData == null || Object.keys(wallsData).length == 0) return;
+
+for (const [expressId, propeties] of Object.entries(wallsData)) {
+  // Add element properties
+  generallString += JSON.stringify(propeties);
+  
+  // Find and add building storey
+  const levelOfThisWall = indexer.getEntitiesWithRelation(
+    model,
+    "ContainsElements",
+    parseInt(expressId)
+  );
+  
+  for (var propOfWall of levelOfThisWall) {
+    const property = await model.getProperties(propOfWall);
+    if (property.type === WEBIFC.IFCBUILDINGSTOREY) {
+      generallString += JSON.stringify(property);
+    }
+  }
+  
+  // Add property sets and quantities
+  const propertiesRelations = indexer.getEntityRelations(
+    model,
+    parseInt(expressId),
+    "IsDefinedBy"
+  );
+  
+  for (const relID of propertiesRelations) {
+    const relatedEntity = await model.getProperties(relID);
+    if (!relatedEntity) continue;
+    
+    if (relatedEntity.type === WEBIFC.IFCPROPERTYSET ||
+        relatedEntity.type === WEBIFC.IFCELEMENTQUANTITY) {
+      generallString += JSON.stringify(relatedEntity);
+    }
+  }
+}
+
+return generallString;
+```
+
+**Source**: `src/bim-components/LoadIfc/index.ts:23-61`
+
+## UI Integration
+
+The component is typically used with a file input UI:
+
+```typescript
+export function LoadIFCUI(components: OBC.Components, world: OBC.SimpleWorld) {
+  const lodLogic = components.get(LoadIfcFile);
+  
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".ifc";
+  fileInput.style.display = "none";
+  
+  const onAddClick = async (e: Event) => {
+    fileInput.click();
+  };
+  
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    await lodLogic.loadFile(file, world);
+  });
+  
+  return BUI.html`
+    <bim-button @click=${onAddClick} label="Add" icon="mi:add"></bim-button>
+  `;
+}
+```
+
+**Source**: `src/bim-components/LoadIfc/src/user-interface.ts:6-29`
+
+## Integration with Other Components
+
+### ChatGpt Integration
+
+The LoadIfcFile component automatically populates the ChatGpt component's `fileData` property:
+
+```typescript
+// In loadFile method
+reader.onload = function(event) {
+  const myData = event.target?.result;
+  if (typeof myData === "string") {
+    gpt.fileData = myData; // Stored for GPT queries
+  }
+};
+```
+
+**Source**: `src/bim-components/LoadIfc/index.ts:74-79`
+
+### FragmentsManager Integration
+
+The component uses the `@thatopen/components` IFC loader and fragments system:
+
+```typescript
+const fragmentLoader = this.components.get(OBC.IfcLoader);
+const model = await fragmentLoader.load(buffer);
+
+// Model is automatically added to FragmentsManager
+// and triggers onFragmentsLoaded events
+```
+
+**Source**: `src/bim-components/LoadIfc/index.ts:64, 87`
+
+### IfcRelationsIndexer Integration
+
+Uses the indexer to traverse IFC relationships:
+
+```typescript
+const indexer = this.components.get(OBC.IfcRelationsIndexer);
+
+// Get spatial containment
+const levelOfThisWall = indexer.getEntitiesWithRelation(
+  model,
+  "ContainsElements",
+  parseInt(expressId)
+);
+
+// Get property definitions
+const propertiesRelations = indexer.getEntityRelations(
+  model,
+  parseInt(expressId),
+  "IsDefinedBy"
+);
+```
+
+**Source**: `src/bim-components/LoadIfc/index.ts:24, 35, 47`
+
+## IFC Entity Types
+
+Commonly used entity types from `web-ifc`:
+
+- `WEBIFC.IFCWALL` - Wall elements
+- `WEBIFC.IFCWALLSTANDARDCASE` - Standard wall elements (fallback)
+- `WEBIFC.IFCSLAB` - Slab/floor elements
+- `WEBIFC.IFCBEAM` - Beam elements
+- `WEBIFC.IFCMATERIAL` - Material definitions
+- `WEBIFC.IFCBUILDINGSTOREY` - Building levels/floors
+- `WEBIFC.IFCPROPERTYSET` - Custom property sets
+- `WEBIFC.IFCELEMENTQUANTITY` - Quantity measurements
+
+## Dependencies
+
+- `@thatopen/components` - IFC loading and fragment management
+- `@thatopen/ui` - UI components
+- `@thatopen/fragments` - Fragment group types
+- `web-ifc` - IFC entity type definitions
+- [ChatGpt](/api/chat-gpt) - Stores extracted file data
+
+## Related Components
+
+- [ChatGpt](/api/chat-gpt) - Receives extracted IFC data for AI queries
+- [ChartData](/api/chart-data) - Analyzes loaded building models
+- [AppManager](/api/app-manager) - Global state management

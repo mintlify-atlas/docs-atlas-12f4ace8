@@ -1,0 +1,489 @@
+---
+title: Using Measurement Tools
+description: Complete guide to measuring distances, dimensions, areas, and volumes in your BIM models
+---
+
+AI-BIM App provides comprehensive measurement tools to analyze distances, dimensions, areas, and volumes directly in the 3D viewport.
+
+## Available Measurement Tools
+
+The measurement system includes five specialized tools:
+
+- **Edge Measurement** - Measure distances along model edges
+- **Face Measurement** - Measure face dimensions and areas
+- **Length Measurement** - Create custom length measurements between any two points
+- **Area Measurement** - Measure surface areas by defining boundaries
+- **Volume Measurement** - Calculate volumes from selected elements
+
+Reference: Measurement tools at `/src/components/Toolbars/Sections/Measurement.ts:26`
+
+## Accessing Measurement Tools
+
+Measurement controls are located in the Measurement tab:
+
+<Steps>
+  <Step title="Open Measurement Tab">
+    In the floating toolbar at the center of the viewport, click the **Measurement** tab.
+  </Step>
+
+  <Step title="Find Measurements Section">
+    The section includes an "Enabled" checkbox, a dropdown menu for tool selection, and a "Delete all" button.
+  </Step>
+
+  <Step title="Enable Measurements">
+    Check the **Enabled** checkbox to activate measurement mode.
+  </Step>
+
+  <Step title="Select Tool Type">
+    Use the dropdown to choose Edge, Face, Volume, Length, or Area measurement.
+  </Step>
+</Steps>
+
+Reference: Measurement UI at `/src/components/Toolbars/Sections/Measurement.ts:167`
+
+## Measuring Edges
+
+Measure distances along existing model edges:
+
+<Steps>
+  <Step title="Enable Measurements">
+    Check the **Enabled** checkbox in the Measurements section.
+  </Step>
+
+  <Step title="Select Edge Tool">
+    In the dropdown, select **Edge**.
+  </Step>
+
+  <Step title="Double-click an Edge">
+    Move your cursor over a model edge and double-click to create a measurement.
+  </Step>
+
+  <Step title="View Measurement">
+    The edge length is displayed directly in the 3D viewport along the edge.
+  </Step>
+
+  <Step title="Create More Measurements">
+    Continue double-clicking edges to measure additional distances.
+  </Step>
+</Steps>
+
+Reference: Edge measurement at `/src/components/Toolbars/Sections/Measurement.ts:14`
+
+<Tip>
+  Edge measurements snap to model geometry, ensuring accurate readings along object boundaries.
+</Tip>
+
+## Measuring Faces
+
+Measure dimensions of flat surfaces:
+
+<Steps>
+  <Step title="Enable Measurements">
+    Check the **Enabled** checkbox.
+  </Step>
+
+  <Step title="Select Face Tool">
+    Choose **Face** from the dropdown menu.
+  </Step>
+
+  <Step title="Double-click a Face">
+    Hover over a flat surface and double-click to measure it.
+  </Step>
+
+  <Step title="View Face Dimensions">
+    The measurement displays the face's area and dimensions.
+  </Step>
+</Steps>
+
+Reference: Face measurement at `/src/components/Toolbars/Sections/Measurement.ts:15`
+
+<Note>
+  Face measurements work best on flat, planar surfaces. Complex curved surfaces may not produce accurate results.
+</Note>
+
+## Creating Length Measurements
+
+Measure custom distances between any two points:
+
+<Steps>
+  <Step title="Enable Measurements">
+    Check the **Enabled** checkbox.
+  </Step>
+
+  <Step title="Select Length Tool">
+    Choose **Length** from the dropdown.
+  </Step>
+
+  <Step title="First Point">
+    Double-click in the viewport to set the first measurement point.
+  </Step>
+
+  <Step title="Second Point">
+    Move to the second location and double-click to complete the measurement.
+  </Step>
+
+  <Step title="View Distance">
+    A line appears between the points with the distance displayed.
+  </Step>
+</Steps>
+
+Reference: Length measurement at `/src/components/Toolbars/Sections/Measurement.ts:17`
+
+<Tip>
+  Length measurements don't require snapping to geometry - measure between any points in 3D space.
+</Tip>
+
+## Measuring Areas
+
+Define custom area measurements:
+
+<Steps>
+  <Step title="Enable Measurements">
+    Check the **Enabled** checkbox.
+  </Step>
+
+  <Step title="Select Area Tool">
+    Choose **Area** from the dropdown menu.
+  </Step>
+
+  <Step title="Define Boundary Points">
+    Double-click to place points that define the area boundary.
+  </Step>
+
+  <Step title="Close the Area">
+    Complete the shape by connecting back to the starting point.
+  </Step>
+
+  <Step title="View Area Calculation">
+    The enclosed area is calculated and displayed.
+  </Step>
+</Steps>
+
+Reference: Area measurement at `/src/components/Toolbars/Sections/Measurement.ts:18`
+
+## Calculating Volumes
+
+Calculate volumes of selected elements:
+
+<Steps>
+  <Step title="Select Elements First">
+    Before enabling volume measurement, click elements in the viewport to select them.
+  </Step>
+
+  <Step title="Enable Measurements">
+    Check the **Enabled** checkbox.
+  </Step>
+
+  <Step title="Select Volume Tool">
+    Choose **Volume** from the dropdown.
+  </Step>
+
+  <Step title="Volume Calculates Automatically">
+    The system analyzes selected fragments and calculates their total volume.
+  </Step>
+
+  <Step title="View Volume Display">
+    The volume measurement appears in the viewport.
+  </Step>
+</Steps>
+
+Reference: Volume calculation at `/src/components/Toolbars/Sections/Measurement.ts:52`
+
+<Note>
+  Volume measurement requires element selection through the highlighter system. Select elements before switching to volume measurement mode.
+</Note>
+
+## Managing Measurements
+
+### Deleting Individual Measurements
+
+Remove specific measurements:
+
+<Steps>
+  <Step title="Select a Measurement">
+    Click on an existing measurement to select it.
+  </Step>
+
+  <Step title="Press Delete Key">
+    Press the **Delete** key on your keyboard.
+  </Step>
+
+  <Step title="Measurement Removed">
+    The selected measurement is deleted from the viewport.
+  </Step>
+</Steps>
+
+Reference: Delete function at `/src/components/Toolbars/Sections/Measurement.ts:69`
+
+<Tip>
+  The Delete key only works when measurements are enabled and the correct tool is selected in the dropdown.
+</Tip>
+
+### Clearing All Measurements
+
+Remove all measurements at once:
+
+<Steps>
+  <Step title="Click Delete All Button">
+    In the Measurements section, click the **Delete all** button.
+  </Step>
+
+  <Step title="All Measurements Cleared">
+    Every measurement from all tools is removed from the viewport.
+  </Step>
+</Steps>
+
+Reference: Delete all function at `/src/components/Toolbars/Sections/Measurement.ts:115`
+
+### Disabling Measurement Mode
+
+Exit measurement mode to restore normal selection:
+
+<Steps>
+  <Step title="Uncheck Enabled">
+    Uncheck the **Enabled** checkbox in the Measurements section.
+  </Step>
+
+  <Step title="Highlighter Re-enabled">
+    Element selection (highlighter) is restored for all tools except Volume.
+  </Step>
+
+  <Step title="Measurements Remain Visible">
+    Existing measurements stay visible but can no longer be created or deleted.
+  </Step>
+</Steps>
+
+Reference: Disable logic at `/src/components/Toolbars/Sections/Measurement.ts:121`
+
+## How Measurement Tools Work
+
+### Tool Initialization
+
+Each measurement type is initialized at startup:
+
+<Steps>
+  <Step title="Component Retrieval">
+    The system retrieves measurement components from the component library.
+  </Step>
+
+  <Step title="World Assignment">
+    Each tool is assigned to the world instance for viewport integration.
+  </Step>
+
+  <Step title="Tool Storage">
+    Tools are stored in a dictionary for easy access by name.
+  </Step>
+</Steps>
+
+Reference: Tool initialization at `/src/components/Toolbars/Sections/Measurement.ts:20`
+
+### Event Management
+
+Measurement tools use event listeners:
+
+- **Double-click event** - Creates new measurements (except Volume)
+- **Keydown event** - Deletes selected measurements
+- **Tool change event** - Switches between measurement types
+- **Enabled toggle** - Activates/deactivates measurement mode
+
+Reference: Event setup at `/src/components/Toolbars/Sections/Measurement.ts:88`
+
+### Highlighter Integration
+
+Measurements interact with the highlighter system:
+
+- **Volume tool** - Highlighter remains enabled to allow element selection
+- **Other tools** - Highlighter is disabled to prevent selection conflicts
+- **On disable** - Highlighter is re-enabled for normal operation
+
+Reference: Highlighter setup at `/src/components/Toolbars/Sections/Measurement.ts:80`
+
+### Volume Measurement Process
+
+<Steps>
+  <Step title="Element Selection Detected">
+    When elements are selected, the highlighter's select event fires.
+  </Step>
+
+  <Step title="Fragment Map Retrieved">
+    Selected element IDs are converted to a fragment map.
+  </Step>
+
+  <Step title="Volume Calculated">
+    The `getVolumeFromFragments` method processes the geometry.
+  </Step>
+
+  <Step title="Result Displayed">
+    The calculated volume is shown in the viewport.
+  </Step>
+</Steps>
+
+Reference: Volume generation at `/src/components/Toolbars/Sections/Measurement.ts:52`
+
+## Measurement Units
+
+Measurement units depend on your IFC file's unit definitions:
+
+- Units are inherited from the IFC model
+- Common units: meters (m), millimeters (mm), feet (ft)
+- Volume units are cubic (m³, mm³, ft³)
+- Area units are square (m², mm², ft²)
+
+<Note>
+  Always verify the units used in your source BIM model to correctly interpret measurements.
+</Note>
+
+## Best Practices
+
+### For Edge and Face Measurements
+<Tip>
+  Zoom in close to the element before measuring to ensure accurate cursor placement and edge/face detection.
+</Tip>
+
+### For Length Measurements
+<Tip>
+  Use the camera's orthographic mode for more accurate point placement when measuring in 2D planes.
+</Tip>
+
+### For Area Measurements
+<Tip>
+  Define area boundaries on a flat plane for most accurate results. Complex 3D boundaries may not calculate correctly.
+</Tip>
+
+### For Volume Measurements
+<Tip>
+  Select entire elements rather than partial fragments for accurate volume calculations. Use the element highlighter, not manual fragment selection.
+</Tip>
+
+## Combining with Other Features
+
+### Measurements + Data Analysis
+
+<Steps>
+  <Step title="Use Charts to Isolate">
+    Use the data visualization charts to isolate specific element types.
+  </Step>
+
+  <Step title="Measure Isolated Elements">
+    With elements isolated, take measurements to analyze that specific category.
+  </Step>
+
+  <Step title="Compare Results">
+    Use AI queries to get total quantities and compare with individual measurements.
+  </Step>
+</Steps>
+
+### Measurements + Element Selection
+
+<Steps>
+  <Step title="Select Elements">
+    Use the highlighter to select elements of interest.
+  </Step>
+
+  <Step title="Focus Camera">
+    Use the Focus button in the Selection toolbar to zoom to selected elements.
+  </Step>
+
+  <Step title="Take Measurements">
+    Enable measurement tools and measure the focused elements in detail.
+  </Step>
+</Steps>
+
+### Quality Verification Workflow
+
+<Steps>
+  <Step title="Query AI for Expected Dimensions">
+    Ask the AI about element dimensions or quantities from IFC properties.
+  </Step>
+
+  <Step title="Verify with Measurements">
+    Use measurement tools to verify that actual geometry matches expected values.
+  </Step>
+
+  <Step title="Document Discrepancies">
+    Take screenshots of measurements that differ from expected values.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Measurements Not Creating
+- Ensure the **Enabled** checkbox is checked
+- Verify you're **double-clicking**, not single-clicking
+- Check that the correct tool is selected in the dropdown
+- For Volume, ensure elements are selected first
+
+### Delete Key Not Working
+- Measurements must be enabled
+- The correct tool must be selected
+- Click the measurement to select it before pressing Delete
+- Check if your browser or OS is intercepting the Delete key
+
+### Inaccurate Measurements
+- Zoom in closer to ensure precise point placement
+- For edge/face measurements, ensure you're clicking the intended geometry
+- Check your model's unit definition in the source BIM software
+- Curved surfaces may not measure accurately with planar tools
+
+### Volume Not Calculating
+- Ensure elements are selected (highlighted) before enabling volume tool
+- Select complete elements, not partial fragments
+- Some element types may not support volume calculation
+- Check browser console for error messages
+
+### Measurements Disappear
+- Measurements are cleared when you click "Delete all"
+- Switching between tools doesn't delete measurements
+- Check if another user or script cleared measurements
+
+### Can't Select Elements While Measuring
+- This is expected behavior for Edge, Face, Length, and Area tools
+- The highlighter is automatically disabled to prevent conflicts
+- Only Volume tool allows element selection
+- Disable measurements to restore normal selection
+
+## Performance Considerations
+
+### Large Models
+- Volume calculations may take several seconds for complex elements
+- Creating many measurements can impact viewport performance
+- Use "Delete all" periodically to clear unnecessary measurements
+
+### Memory Usage
+- Each measurement stores geometry data
+- Hundreds of measurements may consume significant memory
+- Delete measurements when no longer needed
+
+## Keyboard Shortcuts
+
+- **Delete** - Delete selected measurement (when measurement mode is enabled)
+- **Double-click** - Create new measurement (for Edge, Face, Length, Area tools)
+
+<Note>
+  The Enter key and other common shortcuts are not currently mapped to measurement functions. Use the UI buttons or Delete key.
+</Note>
+
+## Tips for Effective Measuring
+
+<Tip>
+  Start with **Edge** measurements for quick distance checks, then use **Length** for custom measurements that don't follow edges.
+</Tip>
+
+<Tip>
+  Use **Volume** measurements to verify total material quantities against AI query results.
+</Tip>
+
+<Tip>
+  Take screenshots of measurements for documentation - they'll be visible in the captured image.
+</Tip>
+
+<Tip>
+  Lock the camera (in Camera toolbar) while taking measurements to prevent accidental view changes.
+</Tip>
+
+## Next Steps
+
+Expand your workflow:
+- Combine measurements with [data analysis](/guide/analyzing-data) for comprehensive model review
+- Use [AI queries](/guide/querying-with-ai) to cross-reference measured values with IFC properties
+- Master [3D navigation](/guide/navigating-3d) to position views optimally for measurement accuracy

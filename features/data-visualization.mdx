@@ -1,0 +1,590 @@
+---
+title: Data Visualization
+description: Visualize BIM data with interactive Chart.js charts for element counting, storey analysis, and material distribution
+icon: chart-bar
+---
+
+## Overview
+
+The Data Visualization feature transforms IFC building data into interactive charts, providing instant insights into your project's composition. Built with Chart.js, the system automatically analyzes element types, building storeys, and material distributions.
+
+<Info>
+  Charts are interactive - click on any bar or segment to isolate those elements in the 3D viewer!
+</Info>
+
+## Chart Types
+
+The application supports two primary chart types for different analytical perspectives:
+
+<CardGroup cols={2}>
+  <Card title="Bar Chart" icon="chart-column">
+    **Elements By Type**
+    
+    Displays count of structural elements (walls, slabs, beams) with color-coded bars for easy comparison.
+  </Card>
+  
+  <Card title="Doughnut Chart" icon="chart-pie">
+    **Elements By Level**
+    
+    Shows distribution of elements across building storeys with proportional segments.
+  </Card>
+</CardGroup>
+
+## Core Technology
+
+The visualization system is built on industry-standard charting technology:
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:4-16
+import {
+  Chart,
+  BarController,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Tooltip,
+  DoughnutController,
+  ArcElement
+} from "chart.js";
+
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, DoughnutController, ArcElement);
+```
+</CodeGroup>
+
+- **Chart.js 4.4.8**: Modern, flexible JavaScript charting library
+- **Modular Architecture**: Only necessary chart types are loaded for optimal performance
+- **Interactive Tooltips**: Hover over any element to see exact counts
+
+## ChartData Component
+
+The custom `ChartData` component integrates with OpenBIM Components to extract and process IFC data:
+
+<CodeGroup>
+```typescript ChartData/index.ts:28-36
+export class ChartData extends OBC.Component {
+  enabled: boolean = true;
+  static uuid = OBC.UUID.create();
+  fragmentGroup = this.components.get(OBC.FragmentsManager);
+
+  constructor(components: OBC.Components){
+    super(components);
+    components.add(ChartData.uuid, this);
+  }
+}
+```
+</CodeGroup>
+
+## Element Counting by Type
+
+The system automatically counts three primary structural element types:
+
+### Data Collection
+
+<CodeGroup>
+```typescript ChartData/index.ts:97-111
+getAllEntitiesOfType = async ()=>{
+  let data: ChartData[] = [];
+  for(var [id,model] of this.fragmentGroup.groups){
+    let walls = await this.getPropertiesOfSpecificType(WEBIFC.IFCWALL, "IfcWall","rgba(255, 0, 0, 0.5)");
+    if(walls.expressIds.length ==0) 
+      walls = await this.getPropertiesOfSpecificType(WEBIFC.IFCWALLSTANDARDCASE,"IfcWallStandardCase", "rgba(255, 0, 0, 0.5)");
+    
+    const slabs = await this.getPropertiesOfSpecificType(WEBIFC.IFCSLAB, "IfcSlab","rgba(0, 150, 255, 0.5)");
+    const beams = await this.getPropertiesOfSpecificType(WEBIFC.IFCBEAM,"IfcBeam","rgba(0, 255, 0, 0.5)");
+    data.push(walls);
+    data.push(slabs);
+    data.push(beams);
+  }
+  return data;
+}
+```
+</CodeGroup>
+
+### Element Type Colors
+
+<Tabs>
+  <Tab title="Walls">
+    **Red** (`rgba(255, 0, 0, 0.5)`)
+    
+    Includes both IFCWALL and IFCWALLSTANDARDCASE types with fallback support.
+  </Tab>
+  
+  <Tab title="Slabs">
+    **Blue** (`rgba(0, 150, 255, 0.5)`)
+    
+    All IFCSLAB elements including floors, roofs, and horizontal structural elements.
+  </Tab>
+  
+  <Tab title="Beams">
+    **Green** (`rgba(0, 255, 0, 0.5)`)
+    
+    All IFCBEAM elements representing horizontal structural members.
+  </Tab>
+</Tabs>
+
+## Building Storey Analysis
+
+The doughnut chart provides spatial distribution analysis across building levels:
+
+<CodeGroup>
+```typescript ChartData/index.ts:51-74
+getPropertiesOfSpecificLevel = async ()=>{
+  const indexer = this.components.get(OBC.IfcRelationsIndexer);
+  const usedColors = new Set<string>();
+  let levelsData: ChartData[] = [];
+  
+  for(const [_, model] of this.fragmentGroup.groups){
+    const levelOfModel = await model.getAllPropertiesOfType(WEBIFC.IFCBUILDINGSTOREY);
+    if(!levelOfModel) continue;
+    
+    for(const [expressId, properties] of Object.entries(levelOfModel)){
+      let pieData : ChartData = {
+        expressIds: [], 
+        elementType: properties.Name.value, 
+        color: this.generateUniqueRGB(usedColors)
+      };
+      
+      const expressIdAsNUmber = parseInt(expressId) as number;
+      const allElementInThisLevel = indexer.getEntitiesWithRelation(model,"ContainedInStructure",expressIdAsNUmber);
+      allElementInThisLevel.forEach(item=>pieData.expressIds.push(item));
+      levelsData.push(pieData);
+    }
+  }
+  return levelsData;
+}
+```
+</CodeGroup>
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Automatic Level Detection">
+    The system discovers all IFCBUILDINGSTOREY entities in the model and extracts their names and contained elements.
+  </Accordion>
+  
+  <Accordion title="Dynamic Color Generation">
+    Each building storey receives a unique RGB color for clear visual distinction in the chart.
+  </Accordion>
+  
+  <Accordion title="Relationship Indexing">
+    Uses the IfcRelationsIndexer to find all elements contained within each spatial structure.
+  </Accordion>
+  
+  <Accordion title="Element Count Tracking">
+    Tracks Express IDs of all elements on each floor for precise counting and isolation.
+  </Accordion>
+</AccordionGroup>
+
+## Unique Color Generation
+
+The system ensures each chart segment has a distinct color:
+
+<CodeGroup>
+```typescript ChartData/index.ts:38-49
+generateUniqueRGB=(usedColors: Set<string>)=> {
+  let color;
+  do {
+    const r = Math.floor(Math.random() * 256);
+    const g = Math.floor(Math.random() * 256);
+    const b = Math.floor(Math.random() * 256);
+    color = `rgb(${r}, ${g}, ${b})`;
+  } while (usedColors.has(color));
+
+  usedColors.add(color);
+  return color;
+}
+```
+</CodeGroup>
+
+<Tip>
+  The color generator uses a Set to track used colors, preventing duplicates and ensuring maximum visual clarity.
+</Tip>
+
+## Chart Configuration
+
+The chart data structure follows Chart.js standards with custom styling:
+
+<CodeGroup>
+```typescript ChartData/index.ts:112-132
+chartData = (data:ChartData[], chartType:string)=>{
+  let singleDataset : BarDataset = {
+    type:chartType as ChartType,
+    data:{
+      labels:data.map(item=>{return item.elementType}),
+      datasets:[{
+        label:"Quantity",
+        data: data.map(item=>{return item.expressIds.length}),
+        backgroundColor: data.map(item=>{return item.color}),
+        borderWidth: [2,2,2],
+        borderRadius: [8,8,8],
+        borderColor: [ "darkred", "darkblue", "darkgreen"]
+      }]
+    }
+  }
+  return singleDataset;
+}
+```
+</CodeGroup>
+
+### Visual Styling
+
+<CardGroup cols={3}>
+  <Card title="Border Width" icon="border-outer">
+    **2px** borders for clear separation between elements
+  </Card>
+  
+  <Card title="Border Radius" icon="circle">
+    **8px** rounded corners for modern, polished appearance
+  </Card>
+  
+  <Card title="Border Colors" icon="palette">
+    Dark borders (darkred, darkblue, darkgreen) for enhanced contrast
+  </Card>
+</CardGroup>
+
+## Interactive Features
+
+### Chart Initialization
+
+The bar chart initializes with element type data:
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:44-60
+const initialize = ()=>{
+  setTimeout(async ()=>{
+    if(chart) chart.destroy();
+    const canvas = document.getElementById("myChart") as HTMLCanvasElement;
+    var data = await chartClass.getAllEntitiesOfType();
+    const chartDataset = chartClass.chartData(data, 'bar');
+    
+    const fullChartData = {...chartDataset, ...OptionsData};
+
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if(!ctx) return;
+    
+    chart = new Chart(ctx, fullChartData);
+    hider.set(true);
+  },0)
+}
+```
+</CodeGroup>
+
+<Note>
+  When a chart is initialized, all elements in the 3D viewer are hidden by default (`hider.set(true)`), preparing for interactive isolation.
+</Note>
+
+### Click Interaction - Bar Chart
+
+Clicking a bar isolates those elements in the 3D viewer:
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:62-96
+canvas.onclick = function(event){
+  hider.set(true);
+  let activePoints = chart?.getElementsAtEventForMode(event, "nearest", {intersect: true}, false);
+  if(activePoints && activePoints.length>0){
+    var index = activePoints[0].index;
+    var label = chart?.data.labels[index];
+    var value = chart?.data.datasets[0].data[index];
+
+    var clickedBarData = data.filter(item=>item.elementType===label)[0];
+    const models = fragmentManager.groups;
+    for(const [id, model] of models){
+      const fragmentMapOfBarIds = model.getFragmentMap(clickedBarData.expressIds);
+      hider.isolate(fragmentMapOfBarIds);
+    }
+
+    const defaultColors = [
+      "rgba(255, 0, 0, 0.7)",
+      "rgba(0, 150, 255, 0.7)",
+      "rgba(0, 255, 0, 0.7)",
+    ];
+    const clickedColor = "rgba(255, 255, 0, 0.7)";
+    const currentColors = chart?.data.datasets[0].backgroundColor;
+
+    for(let i =0; i<defaultColors.length; i++){
+      currentColors[i] = defaultColors[i];
+    }
+
+    if(!currentColors) return;
+    currentColors[index] = currentColors[index] === clickedColor ? defaultColors[index] : clickedColor;
+    chart?.update();
+  }
+}
+```
+</CodeGroup>
+
+### Click Behavior
+
+<Steps>
+  <Step title="Element Detection">
+    Click event detects which bar was clicked using Chart.js "nearest" mode.
+  </Step>
+  
+  <Step title="Data Retrieval">
+    System retrieves all Express IDs associated with that element type.
+  </Step>
+  
+  <Step title="3D Isolation">
+    The `Hider` component isolates only those elements in the 3D viewer.
+  </Step>
+  
+  <Step title="Visual Feedback">
+    Clicked bar changes to yellow (rgba(255, 255, 0, 0.7)) to indicate active selection.
+  </Step>
+</Steps>
+
+### Click Interaction - Doughnut Chart
+
+The doughnut chart provides similar isolation for building storeys:
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:155-171
+canvas.onclick = function(event){
+  hider.set(true);
+  let activePoints = chart?.getElementsAtEventForMode(event, "nearest", {intersect: true}, false);
+  if(activePoints && activePoints.length>0){
+    var index = activePoints[0].index;
+    var label = chart?.data.labels[index];
+    var value = chart?.data.datasets[0].data[index];
+
+    var clickedBarData = levelsData.filter(item=>item.elementType===label)[0];
+    const models = fragmentManager.groups;
+    for(const [modelId, model] of models){
+      const fragmentIdMapFromSelectedChartELement = model.getFragmentMap(clickedBarData.expressIds);
+      hider.isolate(fragmentIdMapFromSelectedChartELement);
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Info>
+  Clicking a doughnut segment isolates all elements on that building storey, making it easy to focus on specific floors.
+</Info>
+
+## Chart Options and Styling
+
+### Bar Chart Configuration
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:24-40
+const OptionsData = {
+  options:{
+    elements: {
+      bar: {
+        borderWidth: 5,
+        borderRadius: 5
+      }
+    },
+    plugins:{
+      tooltip:{
+        enabled: true,
+        mode:"index",
+        intersect:false,
+      }
+    },
+  }
+}
+```
+</CodeGroup>
+
+### Doughnut Chart Configuration
+
+The doughnut chart has specialized styling for compact display:
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:116-150
+const canvas = document.getElementById("myChart") as HTMLCanvasElement;
+canvas.style.maxWidth = "300px";
+canvas.style.maxHeight = "300px";
+canvas.style.display = "flex";
+canvas.style.justifyContent = "center";
+canvas.style.alignItems = "center";
+
+const modifyOPtions = {
+  ...OptionsData, 
+  options:{
+    ...OptionsData.options,
+    layout:{
+      padding:20,
+    },
+    scales:{
+      x:{ display:false },
+      y:{ display:false }
+    },
+    plugins:{
+      ...OptionsData.options.plugins, 
+      legend:{ display:false }
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Tabs>
+  <Tab title="Size Constraints">
+    Max dimensions of 300x300px ensure compact, readable visualization.
+  </Tab>
+  
+  <Tab title="Center Alignment">
+    Flexbox centering creates balanced, professional layout.
+  </Tab>
+  
+  <Tab title="Hidden Axes">
+    X and Y axes are hidden for pie/doughnut charts (not applicable).
+  </Tab>
+  
+  <Tab title="No Legend">
+    Legend is disabled to maximize chart size and reduce clutter.
+  </Tab>
+</Tabs>
+
+## User Interface
+
+The chart panel provides intuitive controls:
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:179-188
+return BUI.html`
+  <bim-panel-section label="Charts" fixed style="display:flex; justify-content:center; align-items: center;">
+    <bim-button @click=${initialize} label="RESTART CHART" icon="mi:add"></bim-button>
+    <bim-dropdown name="type" @change=${dropDownOnClick}>
+      <bim-option label="Elements By Type" value="bar"></bim-option>
+      <bim-option label="Elements By Level" value ="doughnut"></bim-option>
+    </bim-dropdown>
+    <canvas id="myChart" width="300" height="200"></canvas>
+  </bim-panel-section>
+`
+```
+</CodeGroup>
+
+### Control Elements
+
+<CardGroup cols={3}>
+  <Card title="Restart Button" icon="rotate-right">
+    Regenerates the chart from current model data, useful after model changes
+  </Card>
+  
+  <Card title="Chart Type Dropdown" icon="list">
+    Switch between Bar (element types) and Doughnut (building storeys) views
+  </Card>
+  
+  <Card title="Canvas Element" icon="square">
+    300x200px canvas for rendering the interactive chart
+  </Card>
+</CardGroup>
+
+## Chart Switching Logic
+
+<CodeGroup>
+```typescript ChartData/src/user-interface.ts:101-114
+const dropDownOnClick = async (e: Event)=>{
+  const btn = e.target as BUI.Dropdown;
+  const panelSection = btn.closest("bim-panel-section");
+  const chartType= panelSection?.value.type[0];
+  if(!chartType){
+    alert("Select option from dropdown");
+    return;
+  }
+  
+  const levelsData = await chartClass.getPropertiesOfSpecificLevel();
+  if(chartType==="bar"){
+    initialize();
+  }else if(chartType==="doughnut"){
+    // Doughnut chart initialization
+  }
+}
+```
+</CodeGroup>
+
+<Warning>
+  Changing chart types destroys the previous chart instance to prevent memory leaks and ensure clean rendering.
+</Warning>
+
+## Data Structure
+
+The ChartData interface defines the structure for chart datasets:
+
+<CodeGroup>
+```typescript ChartData/index.ts:7-26
+export interface ChartData {
+  expressIds: number[],
+  elementType:string,
+  color:string,
+}
+
+export interface BarDataset{
+  type:string,
+  data:{
+    labels: string[],
+    datasets:[{
+      label:string,
+      data: number[],
+      backgroundColor: string[],
+      borderWidth: number[],
+      borderRadius: number[],
+      borderColor: string[]
+    }]
+  }
+}
+```
+</CodeGroup>
+
+### ChartData Properties
+
+<AccordionGroup>
+  <Accordion title="expressIds: number[]">
+    Array of IFC Express IDs for all elements in this category, used for 3D isolation.
+  </Accordion>
+  
+  <Accordion title="elementType: string">
+    Human-readable label (e.g., "IfcWall", "Level 1") displayed on chart axes.
+  </Accordion>
+  
+  <Accordion title="color: string">
+    RGB/RGBA color string for visual representation in the chart.
+  </Accordion>
+</AccordionGroup>
+
+## Performance Considerations
+
+<Tip>
+  Charts are generated asynchronously with a setTimeout wrapper to prevent UI blocking during data processing.
+</Tip>
+
+<Note>
+  The system processes all loaded models (`fragmentGroup.groups`) to ensure multi-model projects are fully analyzed.
+</Note>
+
+## Best Practices
+
+<Steps>
+  <Step title="Load Model First">
+    Ensure your IFC model is fully loaded before generating charts for accurate data.
+  </Step>
+  
+  <Step title="Use Restart After Changes">
+    Click "RESTART CHART" if you load additional models or modify the scene.
+  </Step>
+  
+  <Step title="Click to Explore">
+    Use chart interaction to isolate and inspect specific element types or building levels.
+  </Step>
+  
+  <Step title="Switch Views">
+    Toggle between bar and doughnut charts for different analytical perspectives.
+  </Step>
+</Steps>
+
+## Future Enhancements
+
+Planned improvements to the visualization system:
+
+- Material distribution pie charts
+- Cost analysis visualization
+- Timeline/schedule Gantt charts
+- Custom filtering by property values
+- Export charts as images
+- Multi-model comparison charts

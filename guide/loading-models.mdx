@@ -1,0 +1,178 @@
+---
+title: Loading IFC Models
+description: Step-by-step guide to loading and importing IFC files into AI-BIM App
+---
+
+Learn how to load IFC files into AI-BIM App and understand what happens during the import process.
+
+## Supported File Formats
+
+AI-BIM App supports three import formats:
+
+- **IFC Files** (.ifc) - Industry Foundation Classes files
+- **Fragments** (.zip) - Pre-converted IFC files for faster loading
+- **BIM Tiles** - Streamed models optimized for large projects
+
+## Loading an IFC File
+
+<Steps>
+  <Step title="Access the Import Toolbar">
+    Navigate to the **Import** tab in the floating toolbar at the center of the viewport. This is where all file loading options are located.
+  </Step>
+
+  <Step title="Click the IFC Button">
+    Click the **IFC** button to open your system's file picker. The app accepts standard `.ifc` files from any BIM authoring software.
+  </Step>
+
+  <Step title="Select Your IFC File">
+    Choose an IFC file from your computer. The file will begin loading immediately after selection.
+  </Step>
+
+  <Step title="Wait for Processing">
+    The app automatically processes the IFC file through several stages:
+    - **Fragment conversion** - IFC geometry is converted to optimized fragments
+    - **Property extraction** - Element properties and metadata are extracted
+    - **Indexing** - Relationships between elements are indexed
+    - **Classification** - Elements are classified by entity type (walls, slabs, beams, etc.)
+  </Step>
+
+  <Step title="View Your Model">
+    Once loading completes, your model appears in the 3D viewport. The camera automatically fits the view to show the entire model.
+  </Step>
+</Steps>
+
+## What Happens During Import
+
+When you load an IFC file, AI-BIM App performs several automatic operations:
+
+### Fragment Conversion
+The IFC geometry is converted into an optimized fragment format for better performance. This allows the app to handle large models efficiently.
+
+### Property Indexing
+The `IfcRelationsIndexer` processes all IFC relationships, including:
+- Spatial containment (which elements are in which building storeys)
+- Property sets and quantities
+- Material associations
+- Element classifications
+
+Reference: `LoadIfcFile` component at `/src/bim-components/LoadIfc/index.ts:64`
+
+### Entity Classification
+Elements are automatically classified by their IFC types:
+- `IFCWALL` / `IFCWALLSTANDARDCASE`
+- `IFCSLAB`
+- `IFCBEAM`
+- `IFCBUILDINGSTOREY`
+- `IFCMATERIAL`
+
+This classification enables data visualization and AI queries.
+
+### Data Preparation for AI
+The system extracts relevant data and prepares it for AI queries:
+- Material properties
+- Building storey information
+- Element quantities
+- Property sets
+
+Reference: `AddIfcFileDataToGenerallString` method at `/src/bim-components/LoadIfc/index.ts:23`
+
+## Alternative Loading Methods
+
+### Loading Fragments
+
+For faster loading, you can use pre-converted fragment files:
+
+<Steps>
+  <Step title="Click Fragments Button">
+    In the Import toolbar, click the **Fragments** button.
+  </Step>
+
+  <Step title="Select ZIP File">
+    Choose a `.zip` file containing:
+    - `geometry.frag` - Fragment geometry data
+    - `properties.json` - Element properties (optional)
+    - `relations-map.json` - Relationship data (optional)
+  </Step>
+
+  <Step title="Model Loads Instantly">
+    Fragment files load much faster than IFC files since conversion is already complete.
+  </Step>
+</Steps>
+
+### Loading BIM Tiles
+
+For very large models, use the streaming tiles format:
+
+<Steps>
+  <Step title="Click Tiles Button">
+    In the Import toolbar, click the **Tiles** button.
+  </Step>
+
+  <Step title="Select Directory">
+    Choose the directory containing your processed tile files (files ending in `-processed.json` and `-processed-properties.json`).
+  </Step>
+
+  <Step title="Model Streams On-Demand">
+    The model loads progressively as you navigate, perfect for large projects that would be slow to load entirely.
+  </Step>
+</Steps>
+
+## File Requirements
+
+### IFC Files
+- Must be valid IFC2x3 or IFC4 format
+- Should contain geometric representations
+- Property sets enhance AI query capabilities
+
+### Fragment Files
+- Must be packaged as `.zip` archives
+- Require `geometry.frag` at minimum
+- Optional properties and relations enhance functionality
+
+### Tile Directories
+- Must contain `-processed.json` geometry files
+- Should include `-processed-properties.json` for full functionality
+- All tile files must be in the same directory
+
+## Troubleshooting
+
+### Model Doesn't Appear
+- Ensure the IFC file contains geometric data (not just metadata)
+- Check browser console for error messages
+- Try zooming out or using the "Fit Model" camera control
+
+### Loading Takes Too Long
+- For large models (>100MB), consider using BIM Tiles instead
+- Close other browser tabs to free up memory
+- Fragment files load significantly faster than IFC
+
+### AI Queries Don't Work
+- Ensure the model has loaded completely
+- IFC files must contain property sets for meaningful AI responses
+- Check that elements have material and storey assignments
+
+### Properties Missing
+- Some IFC files may have incomplete property sets
+- Use a BIM authoring tool to verify property data exists
+- Fragment files require `properties.json` for property access
+
+## Tips for Best Results
+
+<Tip>
+  For files larger than 50MB, use the Fragments or BIM Tiles format for better performance.
+</Tip>
+
+<Tip>
+  Ensure your IFC files include property sets and material assignments for the best AI query experience.
+</Tip>
+
+<Tip>
+  After loading, use the "Fit Model" button in the Camera toolbar to properly frame your model in the viewport.
+</Tip>
+
+## Next Steps
+
+After loading your model:
+- Learn to [navigate the 3D viewport](/guide/navigating-3d)
+- Start [querying with AI](/guide/querying-with-ai)
+- Explore [data visualization features](/guide/analyzing-data)

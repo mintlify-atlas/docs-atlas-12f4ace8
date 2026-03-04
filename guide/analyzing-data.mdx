@@ -1,0 +1,403 @@
+---
+title: Analyzing Data with Charts
+description: Guide to using data visualization features to analyze element counts, filter by building level, and export insights
+---
+
+AI-BIM App includes powerful data visualization tools that generate interactive charts from your BIM model data.
+
+## Chart Features Overview
+
+The charting system provides:
+
+- **Bar charts** showing element counts by type (walls, slabs, beams)
+- **Doughnut charts** displaying element distribution by building level
+- **Interactive filtering** to isolate elements by clicking chart segments
+- **Visual isolation** that highlights selected elements in the 3D viewport
+
+Reference: ChartData component at `/src/bim-components/ChartData/index.ts:28`
+
+## Accessing the Charts Panel
+
+The charts interface is located in the Project Information panel:
+
+<Steps>
+  <Step title="Load an IFC Model">
+    First, load an IFC file containing building elements and storeys.
+  </Step>
+
+  <Step title="Open Project Panel">
+    In the left sidebar, click the **Project** tab (building icon).
+  </Step>
+
+  <Step title="Find Charts Section">
+    Scroll to the **Charts** section, which includes a dropdown, restart button, and canvas area.
+  </Step>
+</Steps>
+
+Reference: Chart UI at `/src/bim-components/ChartData/src/user-interface.ts:179`
+
+## Generating Charts
+
+### Elements by Type (Bar Chart)
+
+Visualize the distribution of structural elements in your model.
+
+<Steps>
+  <Step title="Select Chart Type">
+    Click the dropdown in the Charts section and select **Elements By Type**.
+  </Step>
+
+  <Step title="Chart Generates Automatically">
+    A bar chart appears showing counts for:
+    - Walls (IFCWALL / IFCWALLSTANDARDCASE) - Red bars
+    - Slabs (IFCSLAB) - Blue bars
+    - Beams (IFCBEAM) - Green bars
+  </Step>
+
+  <Step title="Read Element Counts">
+    Hover over bars to see exact quantities for each element type.
+  </Step>
+</Steps>
+
+Reference: Element type data collection at `/src/bim-components/ChartData/index.ts:97`
+
+#### Bar Chart Features
+- **Color-coded** for easy identification
+- **Tooltip display** shows exact counts on hover
+- **8px border radius** for modern appearance
+- **2px border width** for clear separation
+
+Reference: Chart styling at `/src/bim-components/ChartData/index.ts:122`
+
+### Elements by Level (Doughnut Chart)
+
+Analyze how elements are distributed across building storeys.
+
+<Steps>
+  <Step title="Select Chart Type">
+    Click the dropdown and select **Elements By Level**.
+  </Step>
+
+  <Step title="Chart Shows Storey Distribution">
+    A doughnut chart appears with each segment representing a building level (Ground Floor, Level 1, etc.).
+  </Step>
+
+  <Step title="Each Segment is Uniquely Colored">
+    Colors are randomly generated to distinguish between levels.
+  </Step>
+
+  <Step title="Segment Size Shows Proportion">
+    Larger segments indicate levels with more elements.
+  </Step>
+</Steps>
+
+Reference: Level data collection at `/src/bim-components/ChartData/index.ts:51`
+
+#### Doughnut Chart Features
+- **Compact layout** (300x300px maximum)
+- **20px padding** around the chart
+- **Legend disabled** for cleaner presentation
+- **Unique colors** for each building storey
+
+Reference: Doughnut styling at `/src/bim-components/ChartData/src/user-interface.ts:126`
+
+## Interactive Filtering
+
+Click chart elements to isolate them in the 3D viewport:
+
+### Filtering by Element Type
+
+<Steps>
+  <Step title="Click a Bar">
+    In the Elements By Type chart, click on any bar (walls, slabs, or beams).
+  </Step>
+
+  <Step title="Elements Isolate in Viewport">
+    Only the selected element type remains visible in the 3D view. All other elements are hidden.
+  </Step>
+
+  <Step title="Bar Changes Color">
+    The clicked bar turns yellow to indicate selection.
+  </Step>
+
+  <Step title="Click Again to Restore">
+    Click the same bar again to restore the original color and show all elements.
+  </Step>
+</Steps>
+
+Reference: Bar click interaction at `/src/bim-components/ChartData/src/user-interface.ts:62`
+
+### Filtering by Building Level
+
+<Steps>
+  <Step title="Click a Doughnut Segment">
+    In the Elements By Level chart, click any segment representing a building storey.
+  </Step>
+
+  <Step title="Level Elements Isolate">
+    Only elements from the selected building level remain visible in the 3D viewport.
+  </Step>
+
+  <Step title="Inspect Level Details">
+    Navigate the 3D view to examine elements specific to that floor.
+  </Step>
+
+  <Step title="Select Different Level">
+    Click another segment to switch to a different building level.
+  </Step>
+</Steps>
+
+Reference: Doughnut click interaction at `/src/bim-components/ChartData/src/user-interface.ts:155`
+
+### How Filtering Works
+
+The isolation system uses the Hider component:
+
+1. **Fragment ID mapping** - Selected elements are mapped to their fragment IDs
+2. **Hider.isolate()** - Only the mapped fragments remain visible
+3. **3D update** - The viewport updates to show only isolated elements
+4. **Color feedback** - Chart segments change color to indicate selection
+
+Reference: Isolation logic at `/src/bim-components/ChartData/src/user-interface.ts:73`
+
+## Restarting Charts
+
+Refresh chart data after model changes:
+
+<Steps>
+  <Step title="Click RESTART CHART Button">
+    In the Charts section, click the **RESTART CHART** button.
+  </Step>
+
+  <Step title="Chart Data Recalculates">
+    The system re-analyzes the model and generates a fresh bar chart.
+  </Step>
+
+  <Step title="All Elements Become Visible">
+    Any previously isolated elements are revealed.
+  </Step>
+</Steps>
+
+Reference: Restart function at `/src/bim-components/ChartData/src/user-interface.ts:44`
+
+<Tip>
+  Use the restart button after loading a new model or if chart data appears outdated.
+</Tip>
+
+## Understanding Chart Data
+
+### Element Type Detection
+
+The system identifies elements using IFC entity types:
+
+- **Walls**: Searches for `IFCWALL`, falls back to `IFCWALLSTANDARDCASE` if none found
+- **Slabs**: Identifies all `IFCSLAB` entities
+- **Beams**: Identifies all `IFCBEAM` entities
+
+Reference: Type detection at `/src/bim-components/ChartData/index.ts:100`
+
+### Building Level Detection
+
+For level-based charts:
+
+<Steps>
+  <Step title="Find Building Storeys">
+    The system queries all `IFCBUILDINGSTOREY` entities in the model.
+  </Step>
+
+  <Step title="Get Contained Elements">
+    For each storey, it uses the IFC Relations Indexer to find elements with "ContainedInStructure" relationships.
+  </Step>
+
+  <Step title="Count Elements per Level">
+    Each storey's element count is calculated and stored.
+  </Step>
+
+  <Step title="Generate Chart">
+    The chart displays each storey with its element count.
+  </Step>
+</Steps>
+
+Reference: Level detection at `/src/bim-components/ChartData/index.ts:66`
+
+### Color Generation
+
+Colors are intelligently managed:
+
+- **Bar chart colors**: Pre-defined for consistency
+  - Walls: `rgba(255, 0, 0, 0.5)` (red)
+  - Slabs: `rgba(0, 150, 255, 0.5)` (blue)
+  - Beams: `rgba(0, 255, 0, 0.5)` (green)
+  
+- **Doughnut chart colors**: Randomly generated RGB values with uniqueness checking
+- **Selection color**: `rgba(255, 255, 0, 0.7)` (yellow) for clicked elements
+
+Reference: Color generation at `/src/bim-components/ChartData/index.ts:38`
+
+## Chart Library Integration
+
+AI-BIM App uses Chart.js for visualization:
+
+### Registered Components
+- `BarController` - Manages bar chart rendering
+- `BarElement` - Individual bar visualization
+- `DoughnutController` - Manages doughnut chart rendering
+- `ArcElement` - Doughnut segment visualization
+- `CategoryScale` - X-axis scale for bar charts
+- `LinearScale` - Y-axis scale for bar charts
+- `Tooltip` - Hover information display
+
+Reference: Chart.js registration at `/src/bim-components/ChartData/src/user-interface.ts:16`
+
+### Chart Configuration
+
+Default options applied to all charts:
+
+```json
+{
+  "elements": {
+    "bar": {
+      "borderWidth": 5,
+      "borderRadius": 5
+    }
+  },
+  "plugins": {
+    "tooltip": {
+      "enabled": true,
+      "mode": "index",
+      "intersect": false
+    }
+  }
+}
+```
+
+Reference: Chart options at `/src/bim-components/ChartData/src/user-interface.ts:24`
+
+## Advanced Usage
+
+### Combining with Selection Tools
+
+<Steps>
+  <Step title="Isolate by Chart">
+    Use a chart to isolate a specific element type or building level.
+  </Step>
+
+  <Step title="Select Individual Elements">
+    Click individual elements in the isolated view to inspect their properties.
+  </Step>
+
+  <Step title="View Element Data">
+    Check the element properties panel for detailed information.
+  </Step>
+
+  <Step title="Use Focus Tool">
+    Click the Focus button in the Selection toolbar to zoom to specific elements.
+  </Step>
+</Steps>
+
+### Analyzing Model Composition
+
+Use charts to understand your model:
+
+- **Element balance**: Compare wall, slab, and beam quantities
+- **Level complexity**: Identify floors with the most elements
+- **Model completeness**: Check if all expected element types are present
+- **Storey distribution**: Understand vertical organization
+
+### Quality Control Workflows
+
+<Steps>
+  <Step title="Generate Element Type Chart">
+    Check if expected element quantities match your design intent.
+  </Step>
+
+  <Step title="Review Building Levels">
+    Ensure all storeys are defined and contain appropriate elements.
+  </Step>
+
+  <Step title="Isolate Element Types">
+    Visually verify that walls, slabs, and beams are correctly modeled.
+  </Step>
+
+  <Step title="Cross-reference with AI">
+    Use AI queries to get specific counts and compare with chart data.
+  </Step>
+</Steps>
+
+## Exporting Insights
+
+While direct export isn't built-in, you can document findings:
+
+- Take **screenshots** of charts for reports
+- Use the **AI query feature** to generate text summaries of data
+- Manually record element counts from chart tooltips
+- Combine chart visuals with 3D viewport screenshots
+
+<Tip>
+  Use browser screenshot tools or the Print Screen key to capture chart visualizations for documentation.
+</Tip>
+
+## Troubleshooting
+
+### Chart Doesn't Appear
+- Ensure an IFC model is loaded
+- Click the **RESTART CHART** button
+- Check that your model contains walls, slabs, or beams
+- Look for browser console errors
+
+### Empty Chart Displayed
+- Your IFC file may not contain the expected element types
+- Verify element classifications in your BIM authoring software
+- Try loading a different IFC file to test
+
+### Click Doesn't Isolate Elements
+- Ensure you're clicking directly on bars or segments (not empty space)
+- Check if elements are already isolated from a previous selection
+- Click **Show All** in the Selection toolbar to reset visibility
+
+### Incorrect Element Counts
+- Some IFC files use non-standard entity types
+- Check if walls are exported as IFCWALL vs IFCWALLSTANDARDCASE
+- Verify IFC classification in your source BIM model
+
+### Doughnut Chart Missing Levels
+- Ensure building storeys are defined in the IFC file
+- Check spatial structure in your BIM authoring tool
+- Elements not assigned to storeys won't appear in level charts
+
+## Performance Considerations
+
+### Large Models
+- Chart generation may take several seconds for models with thousands of elements
+- The system processes all fragments to calculate counts
+- First chart generation is slowest; subsequent updates are faster
+
+### Memory Usage
+- Each chart stores element expressID arrays
+- Very large models may consume significant memory
+- Close charts when not in use to free resources
+
+## Tips for Effective Data Analysis
+
+<Tip>
+  Start with the **Elements By Type** chart to get an overview, then drill down with **Elements By Level** to understand vertical distribution.
+</Tip>
+
+<Tip>
+  Use chart isolation in combination with the **Focus** tool to quickly inspect specific element categories.
+</Tip>
+
+<Tip>
+  Compare chart data with AI query results to verify model completeness and data accuracy.
+</Tip>
+
+<Tip>
+  For quality control, isolate each element type sequentially and visually verify correct modeling.
+</Tip>
+
+## Next Steps
+
+Enhance your analysis workflow:
+- Use [measurement tools](/guide/measurements) on isolated elements
+- Combine with [AI queries](/guide/querying-with-ai) for detailed property analysis
+- Master [3D navigation](/guide/navigating-3d) to inspect isolated elements effectively

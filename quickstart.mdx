@@ -1,80 +1,279 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart Guide
+description: Get AI-BIM App running and load your first IFC model in under 5 minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
+- Node.js 16+ installed
+- An OpenAI API key (for AI querying features)
+- An IFC file to test with
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+## Quick Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <your-repository-url>
+    cd bim-app
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    npm install
+    ```
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    This installs all required packages including:
+    - Three.js and ThatOpen components for 3D rendering
+    - OpenAI SDK for AI queries
+    - Chart.js for data visualization
+    - TypeScript and Vite build tools
+  </Step>
+
+  <Step title="Configure OpenAI API key">
+    Create a `.env` file in the project root:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash
+    echo "VITE_OPENAI_API_KEY=your_api_key_here" > .env
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Warning>
+      Never commit your `.env` file to version control. It's already included in `.gitignore`.
+    </Warning>
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Start the development server">
+    ```bash
+    npm run dev
+    ```
+    
+    The app will be available at `http://localhost:5173` (or another port if 5173 is in use).
+  </Step>
+</Steps>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Loading Your First IFC Model
 
-### Step 3: Go live
+Once the application is running in your browser:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<Steps>
+  <Step title="Navigate to the Import tab">
+    Click on the **Import** tab in the toolbar at the bottom of the viewport.
+    
+    You'll see three import options:
+    - **IFC**: Load standard IFC files
+    - **Fragments**: Load pre-converted fragment files
+    - **Tiles**: Load streamed BIM tiles for large models
+  </Step>
 
-## Next steps
+  <Step title="Click the IFC button">
+    Click the **IFC** button to open the file picker.
+    
+    ```typescript
+    // Behind the scenes, the app uses the IfcLoader component
+    const ifcLoader = components.get(OBC.IfcLoader);
+    await ifcLoader.setup();
+    
+    const buffer = new Uint8Array(fileArrayBuffer);
+    const model = await ifcLoader.load(buffer);
+    ```
+  </Step>
 
-Now that you have your docs running, explore these key features:
+  <Step title="Select your IFC file">
+    Choose an IFC file from your computer. The app supports:
+    - IFC2x3
+    - IFC4
+    - IFC4.3
+    
+    The model will automatically:
+    - Convert to optimized fragments
+    - Parse IFC properties and relationships
+    - Render in the 3D viewport
+    - Fit to camera view
+  </Step>
+
+  <Step title="Explore the model">
+    Use mouse controls to navigate:
+    - **Left click + drag**: Rotate camera
+    - **Right click + drag**: Pan
+    - **Scroll wheel**: Zoom in/out
+    - **Double-click element**: Select and view properties
+  </Step>
+</Steps>
+
+## Making Your First AI Query
+
+Now let's use the AI-powered querying feature:
+
+<Steps>
+  <Step title="Load IFC for AI processing">
+    Navigate to the **Load to** tab in the toolbar.
+    
+    Click the **Add** button and select your IFC file again. This loads the file content as text for AI processing.
+    
+    ```typescript
+    // The LoadIfcFile component reads the file as text
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const fileContent = event.target?.result;
+      chatGpt.fileData = fileContent; // Store for AI queries
+    };
+    reader.readAsText(file);
+    ```
+    
+    <Note>
+      This step is separate from 3D visualization to optimize performance and prepare data for AI analysis.
+    </Note>
+  </Step>
+
+  <Step title="Access the AI Panel">
+    The AI panel interface allows you to write natural language questions about your model.
+    
+    Example queries you can try:
+    - "How many walls are in the building?"
+    - "What materials are used for slabs?"
+    - "List all elements on the ground floor"
+    - "What is the building height?"
+  </Step>
+
+  <Step title="Submit your query">
+    Type your question in the text input field and click the **Querry** button.
+    
+    ```typescript
+    // The ChatGpt component processes your query
+    const response = await chatGpt.sendQuerryToGPT({
+      message: "How many walls are in the building?",
+      fileData: ifcFileContent
+    });
+    
+    // Uses GPT-3.5-turbo with IFC-specific context
+    model: "gpt-3.5-turbo",
+    messages: [
+      { 
+        role: "system",
+        content: "Based on the given data answer questions about ifc file..."
+      },
+      { 
+        role: "user", 
+        content: `Here is the file content:\n${fileData}\n\nQuestion: ${message}`
+      }
+    ]
+    ```
+  </Step>
+
+  <Step title="View the AI response">
+    The response appears in the text area below your query.
+    
+    The AI analyzes the IFC entities including:
+    - `IFCWALL` and `IFCWALLSTANDARDCASE`
+    - `IFCSLAB`
+    - `IFCBEAM`
+    - `IFCMATERIAL`
+    - `IfcBuildingStorey`
+    - `IfcRelAssociatesMaterial`
+    - `IfcRelContainedInSpatialStructure`
+    
+    <Tip>
+      For best results, ask specific questions about element counts, properties, or relationships.
+    </Tip>
+  </Step>
+</Steps>
+
+## Exploring Selection Tools
+
+The Selection tab provides powerful element interaction:
+
+```typescript
+// Select elements in the viewport
+const highlighter = components.get(OBF.Highlighter);
+highlighter.setup({ world });
+highlighter.zoomToSelection = true; // Auto-zoom to selected elements
+```
+
+**Available tools:**
+
+- **Camera controls**: Switch between orthographic and perspective views
+- **Element selection**: Click to select and view detailed properties
+- **Measurement tools**: Measure distances, areas, and angles
+- **Custom selections**: Save groups of elements for later analysis
+
+## Viewing Project Information
+
+Click the **Project** tab in the left panel to view:
+
+- Model name and metadata
+- IFC schema version
+- Building hierarchy (Building → Storey → Space)
+- Total element counts by type
+- Loaded fragments information
+
+```typescript
+// The app automatically indexes relationships
+const indexer = components.get(OBC.IfcRelationsIndexer);
+await indexer.process(model);
+
+// Classify elements by entity type
+const classifier = components.get(OBC.Classifier);
+classifier.byEntity(model);
+```
+
+## Working with Large Models
+
+For large IFC files (>100MB), use the **Tiles** streaming option:
+
+<Steps>
+  <Step title="Pre-process your IFC">
+    Convert large IFC files to tiled format using ThatOpen's processing tools.
+  </Step>
+
+  <Step title="Load tiles">
+    Click **Tiles** in the Import tab and select the directory containing:
+    - `{model}-processed.json` (geometry data)
+    - `{model}-processed-properties.json` (property data)
+    - Individual tile fragments
+    
+    ```typescript
+    const tilesLoader = components.get(OBF.IfcStreamer);
+    tilesLoader.world = world;
+    tilesLoader.culler.threshold = 10;
+    tilesLoader.culler.maxHiddenTime = 1000;
+    ```
+  </Step>
+
+  <Step title="Benefit from streaming">
+    Only visible tiles are loaded, enabling smooth performance even with massive models.
+  </Step>
+</Steps>
+
+## Analyzing with Charts
+
+The ChartData component provides analytics:
+
+```typescript
+const chartData = components.get(ChartData);
+
+// Get element counts by type
+const entityData = await chartData.getAllEntitiesOfType();
+// Returns: [{elementType: "IfcWall", expressIds: [...], color: "..."}, ...]
+
+// Get elements by building storey
+const levelData = await chartData.getPropertiesOfSpecificLevel();
+// Returns storey-based breakdown for pie charts
+```
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation Guide" icon="gear" href="/installation">
+    Learn about advanced configuration and troubleshooting
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore the component API in detail
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  **Pro tip:** Save frequently used models as Fragments (`.zip` format) for instant loading without IFC conversion overhead.
 </Note>

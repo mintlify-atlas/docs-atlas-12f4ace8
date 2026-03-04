@@ -1,0 +1,666 @@
+---
+title: Element Selection & Inspection
+description: Select and inspect IFC elements in 3D, view properties, explore relationships, and control visibility
+icon: hand-pointer
+---
+
+## Overview
+
+The Element Selection feature provides comprehensive tools for interacting with IFC building elements in the 3D viewer. Select elements with a click, inspect their properties, explore relationships, and control visibility - all through an intuitive interface.
+
+<Info>
+  Selection works seamlessly with both standard and streamed IFC models, handling projects of any size.
+</Info>
+
+## Selection Methods
+
+Multiple ways to select elements in your BIM model:
+
+<CardGroup cols={2}>
+  <Card title="Click Selection" icon="mouse-pointer">
+    Click any element in the 3D viewer to select it and view its properties
+  </Card>
+  
+  <Card title="Multi-Selection" icon="object-group">
+    Hold Ctrl/Cmd while clicking to select multiple elements simultaneously
+  </Card>
+  
+  <Card title="Focus Selection" icon="crosshairs">
+    Use the Focus button to zoom the camera to your current selection
+  </Card>
+  
+  <Card title="Chart Selection" icon="chart-column">
+    Click chart elements to select all items of that type or on that building level
+  </Card>
+</CardGroup>
+
+## Highlighter System
+
+The selection system is powered by the ThatOpen Components Highlighter:
+
+<CodeGroup>
+```typescript main.ts:83-85
+const highlighter = components.get(OBF.Highlighter);
+highlighter.setup({ world });
+highlighter.zoomToSelection = true;
+```
+</CodeGroup>
+
+### Highlighter Features
+
+<Tabs>
+  <Tab title="Automatic Setup">
+    The highlighter is automatically configured when the world is created, ensuring seamless integration.
+  </Tab>
+  
+  <Tab title="Zoom to Selection">
+    When enabled, selecting an element automatically adjusts the camera to focus on it.
+  </Tab>
+  
+  <Tab title="Visual Feedback">
+    Selected elements are visually highlighted with distinct colors for clear identification.
+  </Tab>
+  
+  <Tab title="Event System">
+    The highlighter emits events when elements are selected or deselected for reactive UI updates.
+  </Tab>
+</Tabs>
+
+## Selection Toolbar
+
+The Selection toolbar provides essential visibility and navigation controls:
+
+<CodeGroup>
+```typescript Selection.ts:160-169
+return BUI.Component.create<BUI.PanelSection>(() => {
+  return BUI.html`
+    <bim-toolbar-section label="Selection" icon="ph:cursor-fill">
+      <bim-button @click=${onShowAll} label="Show All" icon="tabler:eye-filled" tooltip-title="Show All" tooltip-text="Shows all elements in all models."></bim-button>
+      <bim-button @click=${onToggleVisibility} label="Toggle Visibility" icon="tabler:square-toggle" tooltip-title="Toggle Visibility" tooltip-text="From the current selection, hides visible elements and shows hidden elements."></bim-button>
+      <bim-button @click=${onIsolate} label="Isolate" icon="prime:filter-fill" tooltip-title="Isolate" tooltip-text="Isolates the current selection."></bim-button>
+      <bim-button @click=${onFocusSelection} label="Focus" icon="ri:focus-mode" tooltip-title="Focus" tooltip-text="Focus the camera to the current selection."></bim-button>
+    </bim-toolbar-section> 
+  `;
+});
+```
+</CodeGroup>
+
+### Toolbar Actions
+
+<AccordionGroup>
+  <Accordion title="Show All" icon="eye">
+    Makes all elements in all loaded models visible, clearing any isolation or hiding.
+    
+    **Shortcut**: Useful for resetting the view after exploring specific elements.
+  </Accordion>
+  
+  <Accordion title="Toggle Visibility" icon="eye-slash">
+    Inverts the visibility of selected elements - hides visible ones, shows hidden ones.
+    
+    **Use Case**: Quick way to remove clutter without losing selection context.
+  </Accordion>
+  
+  <Accordion title="Isolate" icon="filter">
+    Hides all elements except the current selection, focusing attention on specific components.
+    
+    **Pro Tip**: Perfect for analyzing complex areas without distractions.
+  </Accordion>
+  
+  <Accordion title="Focus" icon="crosshairs">
+    Smoothly animates the camera to frame the selected elements optimally.
+    
+    **Behavior**: Sphere radius is expanded 1.2x for comfortable viewing distance.
+  </Accordion>
+</AccordionGroup>
+
+## Show All Implementation
+
+Restore full model visibility with a single click:
+
+<CodeGroup>
+```typescript Selection.ts:104-124
+const onShowAll = () => {
+  const streamedFragsToShow: FRAGS.FragmentIdMap = {};
+
+  for (const [, fragment] of fragments.list) {
+    if (fragment.group?.isStreamed) {
+      streamedFragsToShow[fragment.id] = new Set(fragment.ids);
+      continue;
+    }
+
+    fragment.setVisibility(true);
+    const cullers = components.get(OBC.Cullers);
+    for (const [, culler] of cullers.list) {
+      const culled = culler.colorMeshes.get(fragment.id);
+      if (culled) culled.count = fragment.mesh.count;
+    }
+  }
+
+  if (Object.keys(streamedFragsToShow).length) {
+    streamer.setVisibility(true, streamedFragsToShow);
+  }
+};
+```
+</CodeGroup>
+
+### Process Flow
+
+<Steps>
+  <Step title="Fragment Iteration">
+    System iterates through all fragments (geometry chunks) in all loaded models.
+  </Step>
+  
+  <Step title="Streamed vs Static Handling">
+    Distinguishes between streamed (LOD) and static models for appropriate visibility control.
+  </Step>
+  
+  <Step title="Visibility Restoration">
+    Sets visibility to true for all fragments, making everything visible again.
+  </Step>
+  
+  <Step title="Culler Update">
+    Updates the culling system to reflect the full mesh count for proper rendering.
+  </Step>
+</Steps>
+
+## Toggle Visibility
+
+Invert visibility for selected elements:
+
+<CodeGroup>
+```typescript Selection.ts:14-56
+const onToggleVisibility = () => {
+  const selection = highlighter.selection.select;
+  if (Object.keys(selection).length === 0) {
+    return;
+  }
+  const meshes = new Set<THREE.InstancedMesh>();
+  const streamedFrags: FRAGS.FragmentIdMap = {};
+
+  for (const fragmentID in selection) {
+    const fragment = fragments.list.get(fragmentID);
+    if (!fragment) continue;
+
+    if (fragment.group?.isStreamed) {
+      streamedFrags[fragmentID] = selection[fragmentID];
+      continue;
+    }
+
+    meshes.add(fragment.mesh);
+    const expressIDs = selection[fragmentID];
+    for (const id of expressIDs) {
+      const isHidden = fragment.hiddenItems.has(id);
+      fragment.setVisibility(isHidden, [id]);
+    }
+  }
+
+  if (meshes.size) {
+    cullers.updateInstanced(meshes);
+  }
+
+  if (Object.keys(streamedFrags).length) {
+    for (const fragmentID in streamedFrags) {
+      const fragment = fragments.list.get(fragmentID);
+      if (!fragment) continue;
+      const ids = streamedFrags[fragmentID];
+
+      for (const id of ids) {
+        const isHidden = fragment.hiddenItems.has(id);
+        streamer.setVisibility(isHidden, { [fragment.id]: new Set([id]) });
+      }
+    }
+  }
+};
+```
+</CodeGroup>
+
+<Note>
+  The system checks `fragment.hiddenItems` to determine current visibility state before toggling, ensuring accurate inversion.
+</Note>
+
+## Isolate Selection
+
+Focus exclusively on selected elements:
+
+<CodeGroup>
+```typescript Selection.ts:58-102
+const onIsolate = () => {
+  const selection = highlighter.selection.select;
+  if (Object.keys(selection).length === 0) return;
+
+  const meshes = new Set<THREE.InstancedMesh>();
+  const streamedFragsToHide: FRAGS.FragmentIdMap = {};
+  const streamedFragsToShow: FRAGS.FragmentIdMap = {};
+  const staticFragsToShow: FRAGS.FragmentIdMap = {};
+
+  // First, hide everything
+  for (const [, fragment] of fragments.list) {
+    if (fragment.group?.isStreamed) {
+      streamedFragsToHide[fragment.id] = new Set(fragment.ids);
+      continue;
+    }
+    fragment.setVisibility(false);
+    meshes.add(fragment.mesh);
+  }
+
+  // Then, show only selected elements
+  for (const fragmentID in selection) {
+    const fragment = fragments.list.get(fragmentID);
+    if (!fragment) continue;
+    
+    if (fragment.group?.isStreamed) {
+      streamedFragsToShow[fragmentID] = selection[fragmentID];
+    } else {
+      staticFragsToShow[fragmentID] = selection[fragmentID];
+    }
+  }
+
+  if (Object.keys(staticFragsToShow).length) {
+    hider.set(true, selection);
+    cullers.updateInstanced(meshes);
+  }
+
+  if (Object.keys(streamedFragsToHide).length || Object.keys(streamedFragsToShow).length) {
+    streamer.setVisibility(false, streamedFragsToHide);
+    streamer.setVisibility(true, streamedFragsToShow);
+  }
+};
+```
+</CodeGroup>
+
+### Isolation Strategy
+
+<Steps>
+  <Step title="Global Hide">
+    First pass hides all elements in the model, creating a clean slate.
+  </Step>
+  
+  <Step title="Selection Categorization">
+    Selected elements are categorized into streamed and static groups.
+  </Step>
+  
+  <Step title="Selective Show">
+    Only selected elements are made visible using the appropriate method for their type.
+  </Step>
+  
+  <Step title="Render Update">
+    Culling system is updated to reflect the new visibility state for optimal performance.
+  </Step>
+</Steps>
+
+## Focus Selection
+
+Automatically frame selected elements in the viewport:
+
+<CodeGroup>
+```typescript Selection.ts:126-158
+const onFocusSelection = async () => {
+  if (!world) return;
+  if (!world.camera.hasCameraControls()) return;
+
+  const bbox = components.get(OBC.BoundingBoxer);
+  const fragments = components.get(OBC.FragmentsManager);
+  bbox.reset();
+
+  const selected = highlighter.selection.select;
+  if (!Object.keys(selected).length) return;
+
+  for (const fragID in selected) {
+    const fragment = fragments.list.get(fragID);
+    if (!fragment) continue;
+    const ids = selected[fragID];
+    bbox.addMesh(fragment.mesh, ids);
+  }
+
+  const sphere = bbox.getSphere();
+  const i = Infinity;
+  const mi = -Infinity;
+  const { x, y, z } = sphere.center;
+  const isInf = sphere.radius === i || x === i || y === i || z === i;
+  const isMInf = sphere.radius === mi || x === mi || y === mi || z === mi;
+  const isZero = sphere.radius === 0;
+  if (isInf || isMInf || isZero) {
+    return;
+  }
+
+  sphere.radius *= 1.2;
+  const camera = world.camera;
+  await camera.controls.fitToSphere(sphere, true);
+};
+```
+</CodeGroup>
+
+### Focus Algorithm
+
+<AccordionGroup>
+  <Accordion title="Bounding Box Calculation">
+    The `BoundingBoxer` component calculates the minimum bounding box containing all selected elements.
+  </Accordion>
+  
+  <Accordion title="Sphere Conversion">
+    The bounding box is converted to a bounding sphere for smooth camera animation.
+  </Accordion>
+  
+  <Accordion title="Validation Checks">
+    System validates sphere properties to prevent infinite, zero, or invalid camera positions.
+  </Accordion>
+  
+  <Accordion title="Radius Expansion">
+    Sphere radius is increased by 20% (1.2x) to provide comfortable viewing distance.
+  </Accordion>
+  
+  <Accordion title="Camera Animation">
+    Camera smoothly animates to fit the sphere using `fitToSphere` with animation enabled.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  The Focus function is particularly useful after isolating elements or when selected elements are off-screen.
+</Tip>
+
+## Property Inspection Panel
+
+When elements are selected, a dedicated panel displays their properties:
+
+<CodeGroup>
+```typescript Selection.ts:43-56
+return BUI.Component.create<BUI.Panel>(() => {
+  return BUI.html`
+    <bim-panel>
+      <bim-panel-section name="selection" label="Selection Information" icon="solar:document-bold" fixed>
+        <div style="display: flex; gap: 0.375rem;">
+          <bim-text-input @input=${search} vertical placeholder="Search..." debounce="200"></bim-text-input>
+          <bim-button style="flex: 0;" @click=${toggleExpanded} icon="eva:expand-fill"></bim-button>
+          <bim-button style="flex: 0;" @click=${() => propsTable.downloadData("ElementData", "tsv")} icon="ph:export-fill" tooltip-title="Export Data" tooltip-text="Export the shown properties to TSV."></bim-button>
+        </div>
+        ${propsTable}
+      </bim-panel-section>
+    </bim-panel> 
+  `;
+});
+```
+</CodeGroup>
+
+### Panel Features
+
+<CardGroup cols={3}>
+  <Card title="Search Filter" icon="search">
+    Real-time property search with 200ms debounce for smooth filtering
+  </Card>
+  
+  <Card title="Expand/Collapse" icon="expand">
+    Toggle between compact and expanded views of property hierarchies
+  </Card>
+  
+  <Card title="Export Data" icon="download">
+    Download property data as TSV (Tab-Separated Values) for external analysis
+  </Card>
+</CardGroup>
+
+## Properties Table
+
+The properties table is powered by ThatOpen UI components:
+
+<CodeGroup>
+```typescript Selection.ts:13-26
+const [propsTable, updatePropsTable] = CUI.tables.elementProperties({
+  components,
+  fragmentIdMap: {},
+});
+
+propsTable.preserveStructureOnFilter = true;
+fragments.onFragmentsDisposed.add(() => updatePropsTable());
+
+highlighter.events.select.onHighlight.add((fragmentIdMap) => {
+  if (!viewportGrid) return;
+  viewportGrid.layout = "second";
+  propsTable.expanded = false;
+  updatePropsTable({ fragmentIdMap });
+});
+```
+</CodeGroup>
+
+### Table Behavior
+
+<Steps>
+  <Step title="Dynamic Creation">
+    The table is created using the `elementProperties` helper from ThatOpen UI-OBC.
+  </Step>
+  
+  <Step title="Structure Preservation">
+    Property hierarchy is maintained even when filtering (`preserveStructureOnFilter: true`).
+  </Step>
+  
+  <Step title="Selection Integration">
+    Table automatically updates when the highlighter selection changes.
+  </Step>
+  
+  <Step title="Layout Switching">
+    Viewport switches to "second" layout to show the properties panel alongside the 3D view.
+  </Step>
+</Steps>
+
+## Property Search
+
+Real-time search filtering for quick property lookup:
+
+<CodeGroup>
+```typescript Selection.ts:34-37
+const search = (e: Event) => {
+  const input = e.target as BUI.TextInput;
+  propsTable.queryString = input.value;
+};
+```
+</CodeGroup>
+
+<Info>
+  Search has a 200ms debounce to prevent excessive filtering during typing, improving performance.
+</Info>
+
+## Expand/Collapse Control
+
+<CodeGroup>
+```typescript Selection.ts:39-41
+const toggleExpanded = () => {
+  propsTable.expanded = !propsTable.expanded;
+};
+```
+</CodeGroup>
+
+<Tip>
+  Use expanded view to see deeply nested property sets and relationships. Use collapsed view for quick overview.
+</Tip>
+
+## Clear Selection
+
+When selection is cleared, the panel automatically hides:
+
+<CodeGroup>
+```typescript Selection.ts:28-32
+highlighter.events.select.onClear.add(() => {
+  updatePropsTable({ fragmentIdMap: {} });
+  if (!viewportGrid) return;
+  viewportGrid.layout = "main";
+});
+```
+</CodeGroup>
+
+### Layout Management
+
+<Tabs>
+  <Tab title="Main Layout">
+    **Template**: `"leftPanel viewport" 1fr / 29rem 1fr`
+    
+    Left panel and viewport without properties panel.
+  </Tab>
+  
+  <Tab title="Second Layout">
+    **Template**: `"empty elementDataPanel" 1fr / 1fr 24rem`
+    
+    Adds 24rem properties panel on the right side of viewport.
+  </Tab>
+</Tabs>
+
+## Streamed vs Static Models
+
+The selection system intelligently handles both model types:
+
+<AccordionGroup>
+  <Accordion title="Static Models">
+    **Standard IFC Loading**
+    
+    All geometry is loaded into memory. Selection uses `fragment.setVisibility()` and direct mesh manipulation.
+    
+    **Best For**: Models under 50MB with moderate complexity.
+  </Accordion>
+  
+  <Accordion title="Streamed Models">
+    **Progressive LOD Loading**
+    
+    Geometry is loaded on-demand. Selection uses `streamer.setVisibility()` with fragment ID maps.
+    
+    **Best For**: Large models over 100MB, complex buildings with many elements.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  The system automatically detects model type using `fragment.group?.isStreamed` and applies the appropriate visibility control method.
+</Warning>
+
+## Performance Optimizations
+
+### Culling Integration
+
+Visibility changes trigger culling updates for optimal rendering:
+
+<CodeGroup>
+```typescript Selection.ts:40-42
+if (meshes.size) {
+  cullers.updateInstanced(meshes);
+}
+```
+</CodeGroup>
+
+<Note>
+  Culling updates are batched - only meshes affected by visibility changes are processed, minimizing overhead.
+</Note>
+
+### Fragment ID Maps
+
+The system uses efficient fragment ID maps for selection:
+
+<CodeGroup>
+```typescript Selection.ts
+const streamedFrags: FRAGS.FragmentIdMap = {};
+streamedFrags[fragmentID] = selection[fragmentID];
+```
+</CodeGroup>
+
+**Structure**: `{ [fragmentId: string]: Set<number> }`
+
+- **Key**: Fragment ID (geometry chunk identifier)
+- **Value**: Set of Express IDs (individual element IDs)
+
+## Best Practices
+
+<Steps>
+  <Step title="Single Click for Quick Inspection">
+    Click any element to instantly see its properties without losing context.
+  </Step>
+  
+  <Step title="Multi-Select for Comparison">
+    Ctrl/Cmd-click multiple elements to compare properties side-by-side.
+  </Step>
+  
+  <Step title="Use Isolate for Complex Areas">
+    In dense models, isolate elements to focus on specific components without distraction.
+  </Step>
+  
+  <Step title="Search for Specific Properties">
+    Use the search function to quickly find elements by property name or value.
+  </Step>
+  
+  <Step title="Export for Documentation">
+    Export property data to TSV for inclusion in reports or further analysis.
+  </Step>
+</Steps>
+
+## Keyboard Shortcuts
+
+While not explicitly defined in the code, standard browser interactions work:
+
+<CardGroup cols={2}>
+  <Card title="Ctrl/Cmd + Click" icon="keyboard">
+    Add element to selection (multi-select)
+  </Card>
+  
+  <Card title="Click Empty Space" icon="hand">
+    Clear selection and hide properties panel
+  </Card>
+  
+  <Card title="Scroll in Panel" icon="arrows-up-down">
+    Navigate through element properties
+  </Card>
+  
+  <Card title="Type in Search" icon="magnifying-glass">
+    Filter properties in real-time
+  </Card>
+</CardGroup>
+
+## Element Property Types
+
+The properties table displays comprehensive IFC data:
+
+<CardGroup cols={2}>
+  <Card title="Basic Attributes" icon="info-circle">
+    Name, GlobalId, Type, Description, Object Type
+  </Card>
+  
+  <Card title="Geometric Properties" icon="ruler">
+    Dimensions, coordinates, placement, representation
+  </Card>
+  
+  <Card title="Material Associations" icon="layer-group">
+    Materials, layers, material properties
+  </Card>
+  
+  <Card title="Relationships" icon="project-diagram">
+    Spatial containment, aggregations, connections, definitions
+  </Card>
+  
+  <Card title="Property Sets" icon="table">
+    Custom properties, quantities, classifications
+  </Card>
+  
+  <Card title="Type Properties" icon="clone">
+    Shared properties from element type definitions
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Quality Control Inspection">
+    Select elements to verify properties match specifications. Export data for compliance reporting.
+  </Accordion>
+  
+  <Accordion title="Clash Detection Analysis">
+    Isolate intersecting elements to understand spatial conflicts. Focus camera for detailed inspection.
+  </Accordion>
+  
+  <Accordion title="Material Verification">
+    Select walls, slabs, or beams to confirm material assignments and specifications.
+  </Accordion>
+  
+  <Accordion title="Quantity Takeoff">
+    Multi-select elements by type, export properties to calculate quantities and costs.
+  </Accordion>
+  
+  <Accordion title="BIM Coordination">
+    Inspect element relationships and spatial containment to ensure model integrity.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Combine selection with the AI Assistant to ask questions about specific elements: "What material is used in the selected wall?"
+</Tip>

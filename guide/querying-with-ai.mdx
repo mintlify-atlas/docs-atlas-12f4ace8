@@ -1,0 +1,341 @@
+---
+title: Querying with AI
+description: Learn how to effectively use the AI assistant to query and analyze your BIM model data
+---
+
+AI-BIM App includes an integrated AI assistant powered by OpenAI that can answer questions about your loaded IFC models.
+
+## How AI Queries Work
+
+The AI system analyzes your IFC file data and responds to natural language questions:
+
+1. When you load an IFC file, the system extracts relevant data
+2. Property information is organized and prepared for AI analysis
+3. You ask questions in plain English
+4. The AI analyzes the extracted data and provides concise answers
+
+Reference: ChatGpt component at `/src/bim-components/ChatGpt/index.ts:30`
+
+## Accessing the AI Panel
+
+The AI query interface is available in the **Load to** tab:
+
+<Steps>
+  <Step title="Load an IFC File">
+    First, ensure you have loaded an IFC model. The AI needs model data to analyze.
+  </Step>
+
+  <Step title="Navigate to Load to Tab">
+    Click on the **Load to** tab in the floating toolbar at the center of the viewport.
+  </Step>
+
+  <Step title="Find the AI Panel">
+    The AI Panel section contains a text input field labeled "Write Question" and a response area.
+  </Step>
+</Steps>
+
+Reference: AI Panel UI at `/src/bim-components/ChatGpt/src/user-interface.ts:42`
+
+## Making Your First Query
+
+<Steps>
+  <Step title="Type Your Question">
+    In the "Write Question" text input field, type your question about the model. For example: "How many walls are in this building?"
+  </Step>
+
+  <Step title="Click Query Button">
+    Click the **Querry** button to submit your question to the AI.
+  </Step>
+
+  <Step title="Wait for Response">
+    The AI processes your question against the model data. This may take a few seconds.
+  </Step>
+
+  <Step title="Read the Answer">
+    The AI's response appears in the text area below the input field. Responses are concise and based only on the available data.
+  </Step>
+
+  <Step title="Ask Follow-up Questions">
+    Click **Reset** to clear the previous query and response, then ask another question.
+  </Step>
+</Steps>
+
+Reference: Query submission at `/src/bim-components/ChatGpt/src/user-interface.ts:14`
+
+## What Data is Available to Query?
+
+The AI has access to specific IFC data extracted from your model:
+
+### Material Information
+- Material names and types
+- Material associations with elements
+- `IFCMATERIAL` entities
+
+Reference: Material extraction at `/src/bim-components/LoadIfc/index.ts:94`
+
+### Building Storey Data
+- Building level names (Ground Floor, Level 1, etc.)
+- Elements contained in each storey
+- `IFCBUILDINGSTOREY` entities
+- Spatial containment relationships
+
+### Element Properties
+- Element types (walls, slabs, beams)
+- Property sets (`IFCPROPERTYSET`)
+- Element quantities (`IFCELEMENTQUANTITY`)
+- Defined properties for each element
+
+Reference: Property extraction at `/src/bim-components/LoadIfc/index.ts:47`
+
+### Entity Types
+The system extracts data for:
+- `IFCWALL` and `IFCWALLSTANDARDCASE`
+- `IFCSLAB`
+- `IFCBEAM`
+- `IfcRelAssociatesMaterial`
+- `IfcRelContainedInSpatialStructure`
+
+Reference: Valid entities filter at `/src/bim-components/ChatGpt/index.ts:39`
+
+## Example Questions
+
+### Material Queries
+
+<CodeGroup>
+```text Good Questions
+How many different materials are used in this building?
+What materials are used for the walls?
+List all the materials in this model.
+What is the most common material?
+```
+
+```text Better Questions
+How many IFCMATERIAL entities are defined?
+What materials are associated with wall elements?
+List the unique material names.
+```
+</CodeGroup>
+
+### Storey Information
+
+<CodeGroup>
+```text Good Questions
+How many building storeys are in this model?
+What are the names of each floor?
+How many elements are on the ground floor?
+Which level has the most elements?
+```
+
+```text Better Questions
+List all IFCBUILDINGSTOREY names.
+How many elements are contained in each building storey?
+What is the spatial structure of this building?
+```
+</CodeGroup>
+
+### Element Counts
+
+<CodeGroup>
+```text Good Questions
+How many walls are in the building?
+How many slabs and beams are there?
+What types of elements are in this model?
+Count the total number of structural elements.
+```
+
+```text Better Questions
+How many IFCWALL and IFCWALLSTANDARDCASE elements exist?
+What is the distribution of IFCSLAB, IFCBEAM, and IFCWALL entities?
+Count elements by IFC entity type.
+```
+</CodeGroup>
+
+### Property Queries
+
+<CodeGroup>
+```text Good Questions
+What properties are defined for wall elements?
+Are there any element quantities specified?
+What property sets are available?
+```
+
+```text Better Questions
+List all IFCPROPERTYSET entities.
+What IFCELEMENTQUANTITY data is available?
+What properties are defined in property sets?
+```
+</CodeGroup>
+
+## Crafting Effective Questions
+
+### Be Specific
+<Tip>
+  Instead of "Tell me about this building," ask "How many walls are on Level 1?"
+</Tip>
+
+### Reference IFC Terms
+<Tip>
+  The AI understands IFC terminology. Use terms like "IFCWALL", "building storey", "property sets", and "material associations".
+</Tip>
+
+### Ask One Thing at a Time
+<Tip>
+  Break complex questions into simpler ones: "How many walls?" followed by "How many slabs?"
+</Tip>
+
+### Request Counts and Lists
+<Tip>
+  Questions about counts and lists work best: "Count the materials" or "List all building storeys".
+</Tip>
+
+## Understanding AI Responses
+
+The AI system is configured to provide concise, fact-based answers:
+
+### Response Characteristics
+- **Concise**: Answers use as few words as possible
+- **Data-driven**: Only information from the IFC file is included
+- **No assumptions**: If data isn't available, the AI won't guess
+- **JSON-based**: The AI analyzes structured JSON data extracted from IFC
+
+Reference: System prompt at `/src/bim-components/ChatGpt/index.ts:78`
+
+### When the AI Says "Not Found"
+If the AI responds that information isn't available:
+- The IFC file may not contain that specific data
+- Property sets might be incomplete
+- The data may be in a format not currently extracted
+
+## AI System Architecture
+
+Understanding how the system works helps you ask better questions:
+
+### Data Extraction Process
+
+<Steps>
+  <Step title="IFC File Loaded">
+    When you load an IFC file, it's read as text and converted to an array buffer.
+  </Step>
+
+  <Step title="Properties Extracted">
+    The system extracts properties for specific entity types using the IFC Relations Indexer.
+  </Step>
+
+  <Step title="JSON Conversion">
+    Extracted properties are converted to JSON strings for AI analysis.
+  </Step>
+
+  <Step title="Filtered Data">
+    Only relevant IFC entities are included to reduce data size and improve response speed.
+  </Step>
+</Steps>
+
+Reference: File loading at `/src/bim-components/LoadIfc/index.ts:63`
+
+### Query Processing
+
+<Steps>
+  <Step title="User Submits Question">
+    Your question is sent to the OpenAI API along with the extracted IFC data.
+  </Step>
+
+  <Step title="AI Model: GPT-3.5-Turbo">
+    The system uses GPT-3.5-Turbo for fast, cost-effective responses.
+  </Step>
+
+  <Step title="System Prompt Applied">
+    A system prompt instructs the AI to answer only based on provided data and to be concise.
+  </Step>
+
+  <Step title="Response Returned">
+    The AI's answer is displayed in the text area.
+  </Step>
+</Steps>
+
+Reference: GPT query processing at `/src/bim-components/ChatGpt/index.ts:67`
+
+## Data Filtering for Performance
+
+The system includes an optional data filtering mechanism:
+
+- Filters IFC file content to include only relevant entities
+- Reduces data sent to the AI API
+- Improves response time and reduces API costs
+- Focuses on: materials, walls, slabs, beams, storeys, and relationships
+
+Reference: Data modification at `/src/bim-components/ChatGpt/index.ts:37`
+
+<Note>
+  The filtering function is implemented but may not be active by default. Check the code configuration if responses seem incomplete.
+</Note>
+
+## Limitations and Considerations
+
+### Data Availability
+- AI can only answer questions about data present in the IFC file
+- Some IFC files have minimal property sets
+- Geometric data (shapes, dimensions) may not be fully queryable
+
+### Response Time
+- Queries typically take 2-5 seconds
+- Large IFC files with extensive data may take longer
+- API response times vary based on OpenAI service load
+
+### API Costs
+- Each query consumes OpenAI API credits
+- Consider data filtering for cost optimization
+- GPT-3.5-Turbo is chosen for cost-effectiveness
+
+### Privacy
+- IFC data is sent to OpenAI's servers
+- Ensure compliance with your data privacy requirements
+- Sensitive project data should be handled according to your security policies
+
+## Troubleshooting
+
+### "No file data, cant answear" Alert
+- Ensure you've loaded an IFC file before querying
+- Reload the file if necessary
+- Check that the file loaded successfully (visible in viewport)
+
+Reference: File data check at `/src/bim-components/ChatGpt/src/user-interface.ts:19`
+
+### Empty or Generic Responses
+- Your IFC file may lack the requested data
+- Try more specific questions using IFC terminology
+- Check that property sets are defined in the source BIM model
+
+### Query Button Doesn't Respond
+- Ensure you've entered a question in the text input
+- Check browser console for error messages
+- Verify your OpenAI API key is configured (developer setting)
+
+### Responses are Incomplete
+- The AI is configured for concise answers
+- Ask follow-up questions for more detail
+- Try rephrasing your question to be more specific
+
+## Tips for Best Results
+
+<Tip>
+  Load IFC files that include comprehensive property sets for the most detailed AI responses.
+</Tip>
+
+<Tip>
+  Start with simple counting questions to understand what data is available, then ask more complex queries.
+</Tip>
+
+<Tip>
+  Use the Reset button between unrelated questions to clear the previous context.
+</Tip>
+
+<Tip>
+  If a question doesn't work, try using exact IFC entity type names like "IFCWALL" instead of just "wall".
+</Tip>
+
+## Next Steps
+
+Combine AI queries with other features:
+- Use [data visualization](/guide/analyzing-data) to see element distributions
+- Apply [measurements](/guide/measurements) to verify dimensions mentioned in AI responses
+- Cross-reference AI answers with the element selection panel for detailed properties

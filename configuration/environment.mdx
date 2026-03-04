@@ -1,0 +1,155 @@
+---
+title: Environment Variables
+description: Configure environment variables and build-time settings for the AI-BIM App
+---
+
+## Overview
+
+The AI-BIM App uses environment variables to configure sensitive settings like API keys. These variables are loaded at build time by Vite and must be properly configured before building or running the application.
+
+## Environment Variable Setup
+
+### Creating the .env File
+
+Create a `.env` file in the root directory of your project (same level as `vite.config.ts`):
+
+```bash
+touch .env
+```
+
+### Required Variables
+
+#### VITE_OPENAI_API_KEY
+
+The OpenAI API key used for AI-powered BIM data queries.
+
+```env
+VITE_OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxx
+```
+
+<Warning>
+  Never commit your `.env` file to version control. Add it to `.gitignore` to prevent accidentally exposing your API keys.
+</Warning>
+
+## Vite Configuration Considerations
+
+### Environment Variable Prefix
+
+Vite uses the `VITE_` prefix to expose environment variables to client-side code. Variables without this prefix are not accessible in the browser for security reasons.
+
+**File reference:** `vite.config.ts:1-12`
+
+The current Vite configuration uses default settings:
+
+```typescript
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  base: "./",
+  esbuild: {
+    supported: {
+      "top-level-await": true,
+    },
+  },
+});
+```
+
+### How Environment Variables Are Used
+
+The OpenAI API key is accessed in the ChatGpt component using Vite's `import.meta.env` object:
+
+**File reference:** `src/bim-components/ChatGpt/index.ts:63`
+
+```typescript
+const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+```
+
+This variable is then used to authenticate API requests to OpenAI's chat completions endpoint (`src/bim-components/ChatGpt/index.ts:67-86`).
+
+## Build-Time vs Runtime
+
+<Note>
+  Environment variables in Vite are embedded at **build time**. If you change your `.env` file, you must rebuild the application for changes to take effect.
+</Note>
+
+### Development Mode
+
+```bash
+npm run dev
+```
+
+Vite automatically loads `.env` and watches for changes.
+
+### Production Build
+
+```bash
+npm run build
+```
+
+Environment variables are embedded into the compiled JavaScript. Make sure your `.env` file is configured before building.
+
+## Security Best Practices
+
+### .gitignore Configuration
+
+Always add environment files to `.gitignore`:
+
+```gitignore
+# Environment files
+.env
+.env.local
+.env.*.local
+```
+
+### API Key Protection
+
+<Warning>
+  Since this is a client-side application, the API key will be visible in the compiled JavaScript bundle. For production applications, consider:
+  
+  - Using a backend proxy server to handle OpenAI API calls
+  - Implementing API key rotation
+  - Setting usage limits on your OpenAI API key
+  - Monitoring API usage regularly
+</Warning>
+
+### Environment Templates
+
+Create a `.env.example` file (safe to commit) as a template:
+
+```env
+# OpenAI Configuration
+VITE_OPENAI_API_KEY=your_api_key_here
+```
+
+## Troubleshooting
+
+### API Key Not Found
+
+If you see errors about missing API keys:
+
+1. Verify `.env` file exists in the project root
+2. Check that the variable name starts with `VITE_`
+3. Restart the development server after adding variables
+4. Rebuild the application if running a production build
+
+### Invalid API Key Errors
+
+If authentication fails:
+
+1. Verify your API key is correct in `.env`
+2. Check that there are no extra spaces or quotes
+3. Ensure your OpenAI account has active billing
+4. Verify the API key hasn't been revoked
+
+## Additional Configuration
+
+The application uses standard Vite configuration with:
+
+- **Base path**: `./` for relative asset paths
+- **Top-level await**: Enabled for modern async module loading
+- **ESBuild**: Default TypeScript transpilation
+
+## Related Documentation
+
+- [OpenAI Setup Guide](/configuration/openai-setup)
+- [Getting Started](/quickstart)

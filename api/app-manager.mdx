@@ -1,0 +1,122 @@
+---
+title: AppManager
+description: Global application state management component for the AI-BIM App
+---
+
+## Overview
+
+The `AppManager` component provides centralized access to global application state and UI grid management. It extends the `@thatopen/components` base component system to manage viewport grids and other application-wide resources.
+
+## Class Definition
+
+```typescript
+export class AppManager extends OBC.Component {
+  static uuid = "939bb2bc-7d31-4a44-811d-68e4dd286c35" as const;
+  enabled = true;
+  grids: Map<string, BUI.Grid> = new Map();
+}
+```
+
+**Location**: `src/bim-components/AppManager/index.ts:5`
+
+## Properties
+
+<ParamField path="uuid" type="string" required>
+  Static UUID identifier for the component: `"939bb2bc-7d31-4a44-811d-68e4dd286c35"`
+</ParamField>
+
+<ParamField path="enabled" type="boolean" default="true">
+  Flag indicating whether the component is active
+</ParamField>
+
+<ParamField path="grids" type="Map<string, BUI.Grid>">
+  Map storing named references to UI Grid components throughout the application. Keys are string identifiers (e.g., "viewport"), values are `BUI.Grid` instances.
+</ParamField>
+
+## Usage
+
+### Accessing the AppManager
+
+The `AppManager` is registered with the components system and can be retrieved using the standard `components.get()` method:
+
+```typescript
+import { AppManager } from "./bim-components";
+import * as OBC from "@thatopen/components";
+
+const components = new OBC.Components();
+const appManager = components.get(AppManager);
+```
+
+**Source**: `src/main.ts:65`
+
+### Registering UI Grids
+
+Store references to important UI grids for application-wide access:
+
+```typescript
+const viewportGrid = viewport.querySelector<BUI.Grid>("bim-grid[floating]")!;
+appManager.grids.set("viewport", viewportGrid);
+```
+
+**Source**: `src/main.ts:66-67`
+
+### Retrieving Stored Grids
+
+```typescript
+const viewportGrid = appManager.grids.get("viewport");
+if (viewportGrid) {
+  // Modify grid layouts or access grid elements
+  viewportGrid.layout = "main";
+}
+```
+
+## Integration Example
+
+Complete example from the main application initialization:
+
+```typescript
+import * as OBC from "@thatopen/components";
+import * as BUI from "@thatopen/ui";
+import { AppManager } from "./bim-components";
+
+// Initialize components
+const components = new OBC.Components();
+components.init();
+
+// Get AppManager instance
+const appManager = components.get(AppManager);
+
+// Create viewport with grid
+const viewport = BUI.Component.create<BUI.Viewport>(() => {
+  return BUI.html`
+    <bim-viewport>
+      <bim-grid floating></bim-grid>
+    </bim-viewport>
+  `;
+});
+
+// Register the grid for global access
+const viewportGrid = viewport.querySelector<BUI.Grid>("bim-grid[floating]")!;
+appManager.grids.set("viewport", viewportGrid);
+
+// Later, access the grid from anywhere
+const grid = appManager.grids.get("viewport");
+```
+
+## Use Cases
+
+- **Centralized Grid Management**: Store and retrieve UI grid references across different modules
+- **Global State Access**: Provide a single source of truth for application-wide settings
+- **Component Communication**: Enable different parts of the application to access shared resources
+- **Layout Management**: Dynamically switch between different viewport layouts
+
+## Dependencies
+
+- `@thatopen/components` - Base component system
+- `@thatopen/ui` - UI grid components
+
+## Related Components
+
+- [ChatGpt](/api/chat-gpt) - AI integration component
+- [LoadIfcFile](/api/load-ifc-file) - IFC file loading component
+- [ChartData](/api/chart-data) - Building analytics component

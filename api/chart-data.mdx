@@ -1,0 +1,576 @@
+---
+title: ChartData
+description: Component for analyzing and visualizing building model data with Chart.js
+---
+
+## Overview
+
+The `ChartData` component extracts building element data from loaded IFC models and prepares it for visualization using Chart.js. It provides methods to analyze elements by type, by building level, and generate chart-ready datasets.
+
+## Class Definition
+
+```typescript
+export class ChartData extends OBC.Component {
+  enabled: boolean = true;
+  static uuid = OBC.UUID.create();
+  fragmentGroup = this.components.get(OBC.FragmentsManager);
+
+  constructor(components: OBC.Components) {
+    super(components);
+    components.add(ChartData.uuid, this);
+  }
+}
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:28`
+
+## Properties
+
+<ParamField path="enabled" type="boolean" default="true">
+  Flag indicating whether the component is active
+</ParamField>
+
+<ParamField path="uuid" type="string" required>
+  Dynamically generated UUID identifier for the component instance
+</ParamField>
+
+<ParamField path="fragmentGroup" type="OBC.FragmentsManager" required>
+  Reference to the FragmentsManager containing all loaded building models
+</ParamField>
+
+## Interfaces
+
+### ChartData Interface
+
+Represents a collection of building elements of a specific type.
+
+```typescript
+export interface ChartData {
+  expressIds: number[],
+  elementType: string,
+  color: string,
+}
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:7`
+
+<ParamField path="expressIds" type="number[]">
+  Array of IFC Express IDs identifying specific building elements
+</ParamField>
+
+<ParamField path="elementType" type="string">
+  Human-readable element type name (e.g., "IfcWall", "Ground Floor", "IfcSlab")
+</ParamField>
+
+<ParamField path="color" type="string">
+  RGB color string for chart visualization (e.g., "rgba(255, 0, 0, 0.5)")
+</ParamField>
+
+### BarDataset Interface
+
+Chart.js compatible dataset structure for bar and pie charts.
+
+```typescript
+export interface BarDataset {
+  type: string,
+  data: {
+    labels: string[],
+    datasets: [{
+      label: string,
+      data: number[],
+      backgroundColor: string[],
+      borderWidth: number[],
+      borderRadius: number[],
+      borderColor: string[]
+    }]
+  }
+}
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:13`
+
+<ParamField path="type" type="string">
+  Chart type (e.g., "bar", "pie", "doughnut")
+</ParamField>
+
+<ParamField path="data.labels" type="string[]">
+  Array of label strings for each data point
+</ParamField>
+
+<ParamField path="data.datasets[0].label" type="string">
+  Dataset label (e.g., "Quantity")
+</ParamField>
+
+<ParamField path="data.datasets[0].data" type="number[]">
+  Numeric values for each data point
+</ParamField>
+
+<ParamField path="data.datasets[0].backgroundColor" type="string[]">
+  Background color for each bar/segment
+</ParamField>
+
+<ParamField path="data.datasets[0].borderWidth" type="number[]">
+  Border width for each element
+</ParamField>
+
+<ParamField path="data.datasets[0].borderRadius" type="number[]">
+  Border radius for rounded corners
+</ParamField>
+
+<ParamField path="data.datasets[0].borderColor" type="string[]">
+  Border color for each element
+</ParamField>
+
+## Methods
+
+### getPropertiesOfSpecificLevel
+
+Analyzes all building storeys (levels/floors) in loaded models and returns element counts per level.
+
+```typescript
+getPropertiesOfSpecificLevel = async (): Promise<ChartData[]>
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:51`
+
+<ResponseField name="return" type="Promise<ChartData[]>">
+  Array of ChartData objects, one per building level, containing all elements in that level
+</ResponseField>
+
+**Process Flow**:
+
+1. Iterates through all loaded models in FragmentsManager
+2. Extracts all `IFCBUILDINGSTOREY` entities
+3. For each level, finds all contained elements using spatial relationships
+4. Generates unique colors for each level
+5. Returns array with expressIds, level name, and color
+
+**Example**:
+
+```typescript
+const chartData = components.get(ChartData);
+const levelData = await chartData.getPropertiesOfSpecificLevel();
+
+// Result:
+// [
+//   {
+//     expressIds: [1234, 1235, 1236, ...],
+//     elementType: "Ground Floor",
+//     color: "rgb(142, 68, 173)"
+//   },
+//   {
+//     expressIds: [2234, 2235, 2236, ...],
+//     elementType: "First Floor",
+//     color: "rgb(52, 152, 219)"
+//   }
+// ]
+
+console.log(`${levelData[0].elementType} has ${levelData[0].expressIds.length} elements`);
+// Output: "Ground Floor has 245 elements"
+```
+
+**Implementation**:
+
+```typescript
+const indexer = this.components.get(OBC.IfcRelationsIndexer);
+const usedColors = new Set<string>();
+let levelsData: ChartData[] = [];
+
+for (const [_, model] of this.fragmentGroup.groups) {
+  const levelOfModel = await model.getAllPropertiesOfType(WEBIFC.IFCBUILDINGSTOREY);
+  if (!levelOfModel) continue;
+  
+  for (const [expressId, properties] of Object.entries(levelOfModel)) {
+    let pieData: ChartData = {
+      expressIds: [],
+      elementType: properties.Name.value,
+      color: this.generateUniqueRGB(usedColors)
+    };
+    
+    const expressIdAsNUmber = parseInt(expressId) as number;
+    const allElementInThisLevel = indexer.getEntitiesWithRelation(
+      model,
+      "ContainedInStructure",
+      expressIdAsNUmber
+    );
+    
+    allElementInThisLevel.forEach(item => pieData.expressIds.push(item));
+    levelsData.push(pieData);
+  }
+}
+
+return levelsData;
+```
+
+**Source**: `src/bim-components/ChartData/index.ts:51-74`
+
+### getPropertiesOfSpecificType
+
+Extracts all elements of a specific IFC type from all loaded models.
+
+```typescript
+getPropertiesOfSpecificType = async (
+  typeNumber: number,
+  elementTypeName: string,
+  color: string
+): Promise<ChartData>
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:76`
+
+<ParamField path="typeNumber" type="number" required>
+  IFC entity type number (e.g., `WEBIFC.IFCWALL`, `WEBIFC.IFCSLAB`)
+</ParamField>
+
+<ParamField path="elementTypeName" type="string" required>
+  Human-readable name for the element type (e.g., "IfcWall", "IfcSlab")
+</ParamField>
+
+<ParamField path="color" type="string" required>
+  RGBA color string for visualization (e.g., "rgba(255, 0, 0, 0.5)")
+</ParamField>
+
+<ResponseField name="return" type="Promise<ChartData>">
+  ChartData object containing all expressIds of the specified type across all models
+</ResponseField>
+
+**Example**:
+
+```typescript
+import * as WEBIFC from "web-ifc";
+
+const chartData = components.get(ChartData);
+
+// Get all walls
+const walls = await chartData.getPropertiesOfSpecificType(
+  WEBIFC.IFCWALL,
+  "IfcWall",
+  "rgba(255, 0, 0, 0.5)"
+);
+
+// Get all slabs
+const slabs = await chartData.getPropertiesOfSpecificType(
+  WEBIFC.IFCSLAB,
+  "IfcSlab",
+  "rgba(0, 150, 255, 0.5)"
+);
+
+console.log(`Found ${walls.expressIds.length} walls and ${slabs.expressIds.length} slabs`);
+```
+
+**Implementation**:
+
+```typescript
+let bar: ChartData = {
+  expressIds: [],
+  elementType: elementTypeName,
+  color
+};
+
+for (var [id, model] of this.fragmentGroup.groups) {
+  const searchType = await model.getAllPropertiesOfType(typeNumber);
+  if (!searchType) continue;
+  
+  for (var [expressId, properties] of Object.entries(searchType)) {
+    bar.expressIds.push(parseInt(expressId, 10));
+  }
+}
+
+return bar;
+```
+
+**Source**: `src/bim-components/ChartData/index.ts:76-91`
+
+### getAllEntitiesOfType
+
+Convenience method that retrieves walls, slabs, and beams from all models.
+
+```typescript
+getAllEntitiesOfType = async (): Promise<ChartData[]>
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:97`
+
+<ResponseField name="return" type="Promise<ChartData[]>">
+  Array containing three ChartData objects: walls, slabs, and beams
+</ResponseField>
+
+**Example**:
+
+```typescript
+const chartData = components.get(ChartData);
+const entities = await chartData.getAllEntitiesOfType();
+
+// Result:
+// [
+//   { expressIds: [...], elementType: "IfcWall", color: "rgba(255, 0, 0, 0.5)" },
+//   { expressIds: [...], elementType: "IfcSlab", color: "rgba(0, 150, 255, 0.5)" },
+//   { expressIds: [...], elementType: "IfcBeam", color: "rgba(0, 255, 0, 0.5)" }
+// ]
+
+const [walls, slabs, beams] = entities;
+console.log(`Building has ${walls.expressIds.length} walls, ${slabs.expressIds.length} slabs, and ${beams.expressIds.length} beams`);
+```
+
+**Implementation**:
+
+```typescript
+let data: ChartData[] = [];
+
+for (var [id, model] of this.fragmentGroup.groups) {
+  let walls = await this.getPropertiesOfSpecificType(
+    WEBIFC.IFCWALL,
+    "IfcWall",
+    "rgba(255, 0, 0, 0.5)"
+  );
+  
+  // Fallback to IFCWALLSTANDARDCASE if no walls found
+  if (walls.expressIds.length == 0) {
+    walls = await this.getPropertiesOfSpecificType(
+      WEBIFC.IFCWALLSTANDARDCASE,
+      "IfcWallStandardCase",
+      "rgba(255, 0, 0, 0.5)"
+    );
+  }
+  
+  const slabs = await this.getPropertiesOfSpecificType(
+    WEBIFC.IFCSLAB,
+    "IfcSlab",
+    "rgba(0, 150, 255, 0.5)"
+  );
+  
+  const beams = await this.getPropertiesOfSpecificType(
+    WEBIFC.IFCBEAM,
+    "IfcBeam",
+    "rgba(0, 255, 0, 0.5)"
+  );
+  
+  data.push(walls);
+  data.push(slabs);
+  data.push(beams);
+}
+
+return data;
+```
+
+**Source**: `src/bim-components/ChartData/index.ts:97-110`
+
+### chartData
+
+Converts ChartData array into a Chart.js compatible dataset.
+
+```typescript
+chartData = (data: ChartData[], chartType: string): BarDataset
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:112`
+
+<ParamField path="data" type="ChartData[]" required>
+  Array of ChartData objects to convert
+</ParamField>
+
+<ParamField path="chartType" type="string" required>
+  Chart.js chart type ("bar", "pie", "doughnut", "line", etc.)
+</ParamField>
+
+<ResponseField name="return" type="BarDataset">
+  Chart.js compatible dataset ready for rendering
+</ResponseField>
+
+**Example**:
+
+```typescript
+import Chart from "chart.js/auto";
+
+const chartData = components.get(ChartData);
+
+// Get element data
+const entities = await chartData.getAllEntitiesOfType();
+
+// Convert to chart dataset
+const dataset = chartData.chartData(entities, "bar");
+
+// Create chart
+const ctx = document.getElementById('myChart') as HTMLCanvasElement;
+const myChart = new Chart(ctx, dataset);
+
+// The dataset structure:
+// {
+//   type: "bar",
+//   data: {
+//     labels: ["IfcWall", "IfcSlab", "IfcBeam"],
+//     datasets: [{
+//       label: "Quantity",
+//       data: [150, 45, 30],
+//       backgroundColor: ["rgba(255, 0, 0, 0.5)", "rgba(0, 150, 255, 0.5)", "rgba(0, 255, 0, 0.5)"],
+//       borderWidth: [2, 2, 2],
+//       borderRadius: [8, 8, 8],
+//       borderColor: ["darkred", "darkblue", "darkgreen"]
+//     }]
+//   }
+// }
+```
+
+**Implementation**:
+
+```typescript
+let singleDataset: BarDataset = {
+  type: chartType as ChartType,
+  data: {
+    labels: data.map(item => { return item.elementType }),
+    datasets: [
+      {
+        label: "Quantity",
+        data: data.map(item => { return item.expressIds.length }),
+        backgroundColor: data.map(item => { return item.color }),
+        borderWidth: [2, 2, 2],
+        borderRadius: [8, 8, 8],
+        borderColor: ["darkred", "darkblue", "darkgreen"]
+      }
+    ]
+  }
+};
+
+return singleDataset;
+```
+
+**Source**: `src/bim-components/ChartData/index.ts:112-132`
+
+### generateUniqueRGB
+
+Internal utility method to generate unique random RGB colors.
+
+```typescript
+generateUniqueRGB = (usedColors: Set<string>): string
+```
+
+**Location**: `src/bim-components/ChartData/index.ts:38`
+
+<ParamField path="usedColors" type="Set<string>" required>
+  Set of already used color strings to ensure uniqueness
+</ParamField>
+
+<ResponseField name="return" type="string">
+  Unique RGB color string in format "rgb(r, g, b)"
+</ResponseField>
+
+## Complete Usage Example
+
+### Building Analytics Dashboard
+
+```typescript
+import * as OBC from "@thatopen/components";
+import Chart from "chart.js/auto";
+import { ChartData } from "./bim-components/ChartData";
+import * as WEBIFC from "web-ifc";
+
+// Initialize
+const components = new OBC.Components();
+const chartData = components.get(ChartData);
+
+// Create bar chart of element types
+async function createElementTypeChart() {
+  const entities = await chartData.getAllEntitiesOfType();
+  const dataset = chartData.chartData(entities, "bar");
+  
+  const ctx = document.getElementById('elementChart') as HTMLCanvasElement;
+  new Chart(ctx, dataset);
+}
+
+// Create pie chart of elements per level
+async function createLevelDistributionChart() {
+  const levelData = await chartData.getPropertiesOfSpecificLevel();
+  const dataset = chartData.chartData(levelData, "pie");
+  
+  const ctx = document.getElementById('levelChart') as HTMLCanvasElement;
+  new Chart(ctx, dataset);
+}
+
+// Custom analysis: doors and windows
+async function createOpeningsChart() {
+  const doors = await chartData.getPropertiesOfSpecificType(
+    WEBIFC.IFCDOOR,
+    "Doors",
+    "rgba(139, 69, 19, 0.5)"
+  );
+  
+  const windows = await chartData.getPropertiesOfSpecificType(
+    WEBIFC.IFCWINDOW,
+    "Windows",
+    "rgba(135, 206, 235, 0.5)"
+  );
+  
+  const dataset = chartData.chartData([doors, windows], "doughnut");
+  const ctx = document.getElementById('openingsChart') as HTMLCanvasElement;
+  new Chart(ctx, dataset);
+}
+
+// Execute all charts
+await createElementTypeChart();
+await createLevelDistributionChart();
+await createOpeningsChart();
+```
+
+### Element Highlighting from Chart
+
+```typescript
+import * as OBF from "@thatopen/components-front";
+
+// Get chart data
+const levelData = await chartData.getPropertiesOfSpecificLevel();
+const dataset = chartData.chartData(levelData, "bar");
+
+// Create interactive chart
+const ctx = document.getElementById('myChart') as HTMLCanvasElement;
+const myChart = new Chart(ctx, {
+  ...dataset,
+  options: {
+    onClick: (event, elements) => {
+      if (elements.length > 0) {
+        const index = elements[0].index;
+        const selectedLevel = levelData[index];
+        
+        // Highlight elements in 3D viewer
+        const highlighter = components.get(OBF.Highlighter);
+        const fragmentsManager = components.get(OBC.FragmentsManager);
+        
+        for (const [_, model] of fragmentsManager.groups) {
+          highlighter.highlightByID(
+            "select",
+            selectedLevel.expressIds,
+            true,
+            false,
+            model
+          );
+        }
+      }
+    }
+  }
+});
+```
+
+## IFC Entity Types Reference
+
+Commonly used types:
+
+- `WEBIFC.IFCWALL` - Wall elements
+- `WEBIFC.IFCWALLSTANDARDCASE` - Standard wall elements
+- `WEBIFC.IFCSLAB` - Floor/slab elements
+- `WEBIFC.IFCBEAM` - Beam elements
+- `WEBIFC.IFCDOOR` - Door elements
+- `WEBIFC.IFCWINDOW` - Window elements
+- `WEBIFC.IFCBUILDINGSTOREY` - Building levels/floors
+- `WEBIFC.IFCCOLUMN` - Column elements
+
+## Dependencies
+
+- `@thatopen/components` - Fragment and model management
+- `@thatopen/ui` - UI components
+- `chart.js` - Chart rendering library
+- `web-ifc` - IFC entity type definitions
+
+## Related Components
+
+- [LoadIfcFile](/api/load-ifc-file) - Loads models for analysis
+- [AppManager](/api/app-manager) - Global state management
+- [ChatGpt](/api/chat-gpt) - AI-powered queries about building data

@@ -1,0 +1,142 @@
+---
+title: Introduction to AI-BIM App
+description: A powerful web-based application for 3D IFC model visualization with AI-powered querying and data analytics
+---
+
+## What is AI-BIM App?
+
+AI-BIM App is a modern web application that combines 3D Building Information Modeling (BIM) visualization with artificial intelligence capabilities. It allows architects, engineers, and construction professionals to load IFC (Industry Foundation Classes) files, visualize them in 3D, and interact with the building data using natural language queries powered by OpenAI.
+
+<Note>
+  AI-BIM App transforms complex IFC data into an interactive 3D experience with intelligent querying capabilities.
+</Note>
+
+## Key Capabilities
+
+### 3D IFC Visualization
+
+The application provides advanced 3D visualization capabilities powered by Three.js and ThatOpen components:
+
+- **Real-time 3D rendering** with orthographic and perspective camera modes
+- **Interactive model exploration** with orbit controls, zoom, and pan
+- **Post-processing effects** including ambient occlusion and custom line rendering
+- **Performance optimization** with fragment-based loading and streaming for large models
+- **Multiple import formats** including IFC, pre-converted Fragments, and BIM Tiles
+
+### AI-Powered Querying
+
+Query your BIM data using natural language powered by OpenAI's GPT-3.5-turbo:
+
+```typescript
+// The AI analyzes IFC file content and answers questions
+const response = await chatGpt.getQuerry({
+  message: "How many walls are on the ground floor?",
+  fileData: ifcFileContent
+});
+```
+
+The AI component intelligently filters IFC entities (walls, slabs, beams, materials, building storeys) to provide accurate responses based on your project data.
+
+### Data Analytics
+
+Visualize your building data with interactive charts:
+
+- **Element quantity analysis** - Bar charts showing counts of walls, slabs, and beams
+- **Building storey breakdown** - Pie charts displaying element distribution across floors
+- **Material tracking** - View and analyze material properties throughout your model
+- **Custom selections** - Create and save custom element groups for analysis
+
+### Advanced Selection Tools
+
+- **Element highlighting** with automatic zoom-to-selection
+- **Property inspection** with detailed IFC relationship data
+- **Spatial structure navigation** - Browse by building, storey, and space
+- **Classification system** - Organize elements by entity type
+
+## Who Should Use AI-BIM App?
+
+### AEC Professionals
+
+- **Architects** reviewing design models and querying spatial relationships
+- **Engineers** analyzing structural elements and material specifications
+- **Construction managers** extracting quantity takeoffs and project information
+- **BIM coordinators** validating model data and checking compliance
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Design Review" icon="eye">
+    Visualize and query architectural models to verify design intent and compliance
+  </Card>
+  <Card title="Quantity Extraction" icon="calculator">
+    Use AI queries to extract element counts, areas, and volumes without manual counting
+  </Card>
+  <Card title="Data Validation" icon="check">
+    Verify IFC data integrity by querying properties and relationships
+  </Card>
+  <Card title="Client Presentations" icon="presentation">
+    Showcase interactive 3D models with real-time data access
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+AI-BIM App is built with modern web technologies:
+
+### Core Technologies
+
+- **Three.js 0.160.1** - WebGL-based 3D graphics rendering
+- **ThatOpen Components 2.4.x** - BIM-focused component library
+  - `@thatopen/components` - Core BIM functionality
+  - `@thatopen/components-front` - Frontend rendering components
+  - `@thatopen/ui` and `@thatopen/ui-obc` - UI component system
+- **web-ifc 0.0.66** - IFC file parsing and processing
+- **OpenAI API 4.89.0** - GPT-powered natural language querying
+
+### Supporting Libraries
+
+- **Chart.js 4.4.8** - Data visualization and analytics
+- **JSZip 3.10.1** - Handling compressed fragment files
+- **TypeScript 5.2.2** - Type-safe development
+- **Vite 5.2.0** - Fast build tooling and dev server
+
+### Architecture Overview
+
+```typescript
+// Component-based architecture using ThatOpen Components
+const components = new OBC.Components();
+
+// Core systems
+const worlds = components.get(OBC.Worlds);
+const fragments = components.get(OBC.FragmentsManager);
+const ifcLoader = components.get(OBC.IfcLoader);
+
+// Custom components
+const chatGpt = components.get(ChatGpt);
+const chartData = components.get(ChartData);
+const appManager = components.get(AppManager);
+```
+
+## Application Structure
+
+The app features a multi-panel interface:
+
+- **Left Panel**: Project information, settings, and help documentation
+- **Main Viewport**: 3D model visualization with interactive controls
+- **Toolbar Tabs**: Import, Selection, Measurement, and AI Query tools
+- **Element Data Panel**: Displays properties and relationships for selected elements
+
+<Warning>
+  An OpenAI API key is required to use the AI querying features. See the installation guide for setup instructions.
+</Warning>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Get up and running in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed setup instructions
+  </Card>
+</CardGroup>

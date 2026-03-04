@@ -1,0 +1,615 @@
+---
+title: Viewport System
+description: 3D viewport rendering, grid layouts, and dynamic panel integration
+---
+
+The AI-BIM App uses `@thatopen/ui`'s grid-based layout system to create a responsive viewport with dynamic panel integration. The viewport manages 3D rendering, UI overlays, and adaptive layouts.
+
+## Viewport Architecture
+
+The viewport system consists of three layers:
+
+1. **Main Application Grid** - Top-level layout with left panel and viewport
+2. **Viewport Component** - 3D rendering container with floating grid
+3. **Viewport Grid** - Dynamic toolbar and panel layouts
+
+## Viewport Component
+
+**Source:** main.ts:33-39
+
+### Creation
+
+```typescript
+const viewport = BUI.Component.create<BUI.Viewport>(() => {
+  return BUI.html`
+    <bim-viewport>
+      <bim-grid floating></bim-grid>
+    </bim-viewport>
+  `;
+});
+```
+
+The viewport contains:
+- **`<bim-viewport>`** - 3D rendering canvas container
+- **`<bim-grid floating>`** - Overlay grid for UI elements
+
+### Renderer Integration
+
+```typescript
+world.renderer = new OBF.PostproductionRenderer(components, viewport);
+const { postproduction } = world.renderer;
+
+world.camera = new OBC.OrthoPerspectiveCamera(components);
+```
+
+Reference: main.ts:41-44
+
+**Postproduction Setup:**
+
+```typescript
+postproduction.enabled = true;
+postproduction.customEffects.excludedMeshes.push(worldGrid.three);
+postproduction.setPasses({ custom: true, ao: true, gamma: true });
+postproduction.customEffects.lineColor = 0x17191c;
+```
+
+Reference: main.ts:60-63
+
+- **Ambient Occlusion (AO)**: Adds depth perception with shadows
+- **Gamma Correction**: Color space adjustment for accurate display
+- **Custom Effects**: Edge rendering for model clarity
+- **Line Color**: Dark gray (`0x17191c`) for subtle outlines
+
+### Resize Handling
+
+```typescript
+const resizeWorld = () => {
+  world.renderer?.resize();
+  world.camera.updateAspect();
+};
+
+viewport.addEventListener("resize", resizeWorld);
+```
+
+Reference: main.ts:51-56
+
+## Main Application Layout
+
+**Source:** main.ts:176-190
+
+### Grid Structure
+
+```typescript
+const app = document.getElementById("app") as BUI.Grid;
+app.layouts = {
+  main: {
+    template: `
+      "leftPanel viewport" 1fr
+      /29rem 1fr
+    `,
+    elements: {
+      leftPanel,
+      viewport,
+    },
+  },
+};
+
+app.layout = "main";
+```
+
+### Layout Breakdown
+
+**CSS Grid Template:**
+```css
+grid-template-areas: "leftPanel viewport";
+grid-template-rows: 1fr;
+grid-template-columns: 29rem 1fr;
+```
+
+- **Left Panel**: Fixed width of 29rem (464px)
+- **Viewport**: Fills remaining horizontal space (`1fr`)
+- **Height**: Both fill container height (`1fr`)
+
+**Elements:**
+- `leftPanel` - Tabbed panel with Project, Settings, and Help tabs
+- `viewport` - 3D rendering viewport with floating grid
+
+## Viewport Grid Layouts
+
+**Source:** main.ts:192-214
+
+The floating grid inside the viewport has two dynamic layouts:
+
+### Main Layout (Default)
+
+```typescript
+const viewportGrid = viewport.querySelector<BUI.Grid>("bim-grid[floating]")!;
+appManager.grids.set("viewport", viewportGrid);
+
+viewportGrid.layouts = {
+  main: {
+    template: `
+      "empty" 1fr
+      "toolbar" auto
+      /1fr
+    `,
+    elements: { toolbar },
+  },
+  // ...
+};
+
+viewportGrid.layout = "main";
+```
+
+**Layout Structure:**
+```css
+grid-template-areas: 
+  "empty"
+  "toolbar";
+grid-template-rows: 1fr auto;
+grid-template-columns: 1fr;
+```
+
+- **Empty Area**: Full viewport for 3D rendering
+- **Toolbar**: Bottom-aligned, auto-height toolbar
+- **Width**: Fills viewport width (`1fr`)
+
+**Visual:**
+```
+┌─────────────────────┐
+│                     │
+│    3D Viewport      │  1fr (fills space)
+│                     │
+├─────────────────────┤
+│     Toolbar         │  auto (content height)
+└─────────────────────┘
+```
+
+### Second Layout (Selection Active)
+
+```typescript
+second: {
+  template: `
+    "empty elementDataPanel" 1fr
+    "toolbar elementDataPanel" auto
+    /1fr 24rem
+  `,
+  elements: {
+    toolbar,
+    elementDataPanel,
+  },
+}
+```
+
+**Layout Structure:**
+```css
+grid-template-areas:
+  "empty elementDataPanel"
+  "toolbar elementDataPanel";
+grid-template-rows: 1fr auto;
+grid-template-columns: 1fr 24rem;
+```
+
+- **Empty Area**: 3D viewport (reduced width)
+- **Element Data Panel**: Fixed 24rem (384px) width, spans full height
+- **Toolbar**: Bottom-left, auto-height
+
+**Visual:**
+```
+┌──────────────────┬──────────┐
+│                  │          │
+│   3D Viewport    │ Element  │  1fr (fills space)
+│                  │  Data    │
+├──────────────────┤  Panel   │
+│    Toolbar       │          │  auto (toolbar height)
+└──────────────────┴──────────┘
+     1fr            24rem
+```
+
+### Layout Switching
+
+Layouts switch automatically based on element selection:
+
+**Selection Panel (src/components/Panels/Selection.ts):**
+
+```typescript
+const highlighter = components.get(OBF.Highlighter);
+const appManager = components.get(AppManager);
+const viewportGrid = appManager.grids.get("viewport");
+
+highlighter.events.select.onHighlight.add((fragmentIdMap) => {
+  if (!viewportGrid) return;
+  viewportGrid.layout = "second"; // Show element data panel
+  propsTable.expanded = false;
+  updatePropsTable({ fragmentIdMap });
+});
+
+highlighter.events.select.onClear.add(() => {
+  updatePropsTable({ fragmentIdMap: {} });
+  if (!viewportGrid) return;
+  viewportGrid.layout = "main"; // Hide element data panel
+});
+```
+
+Reference: Selection.ts:8-32
+
+## Toolbar Integration
+
+**Source:** main.ts:131-158
+
+### Tabbed Toolbar
+
+```typescript
+const toolbar = BUI.Component.create(() => {
+  return BUI.html`
+    <bim-tabs floating style="justify-self: center; border-radius: 0.5rem;">
+      <bim-tab label="Import">
+        <bim-toolbar>
+          ${load(components)}
+        </bim-toolbar>
+      </bim-tab>
+      <bim-tab label="Selection">
+        <bim-toolbar>
+          ${camera(world)}
+          ${selection(components, world)}
+        </bim-toolbar>
+      </bim-tab>
+      <bim-tab label="Measurement">
+        <bim-toolbar>
+          ${measurement(world, components)}
+        </bim-toolbar>      
+      </bim-tab>
+      <bim-tab label="Load to">
+        <bim-toolbar>
+          ${LoadIFCUI(components, world)}
+        </bim-toolbar>      
+      </bim-tab>
+    </bim-tabs>
+  `;
+});
+```
+
+**Styling:**
+- `floating` - Overlays viewport instead of displacing content
+- `justify-self: center` - Horizontally centers in grid area
+- `border-radius: 0.5rem` - Rounded corners (8px)
+
+**Tabs:**
+1. **Import** - IFC, Fragments, Tiles loading
+2. **Selection** - Camera controls, visibility, isolation, focus
+3. **Measurement** - Edge, Face, Volume, Length, Area tools
+4. **Load to** - Custom IFC loading UI
+
+## Grid Management
+
+### AppManager Grid Registry
+
+```typescript
+const appManager = components.get(AppManager);
+const viewportGrid = viewport.querySelector<BUI.Grid>("bim-grid[floating]")!;
+appManager.grids.set("viewport", viewportGrid);
+```
+
+Reference: main.ts:65-67
+
+The `AppManager` maintains a registry of named grids for global access:
+
+```typescript
+// Accessing from any component
+const viewportGrid = appManager.grids.get("viewport");
+if (viewportGrid) {
+  viewportGrid.layout = "second";
+}
+```
+
+### Dynamic Layout Changes
+
+Layouts can be changed programmatically:
+
+```typescript
+// Switch to layout with element panel
+viewportGrid.layout = "second";
+
+// Return to default layout
+viewportGrid.layout = "main";
+```
+
+## World Grid Configuration
+
+**Source:** main.ts:46-49
+
+### Ground Plane Grid
+
+```typescript
+const worldGrid = components.get(OBC.Grids).create(world);
+worldGrid.material.uniforms.uColor.value = new THREE.Color(0x424242);
+worldGrid.material.uniforms.uSize1.value = 2;
+worldGrid.material.uniforms.uSize2.value = 8;
+```
+
+**Parameters:**
+- **Color**: Dark gray (`0x424242`) for subtle reference
+- **Size1**: Primary grid spacing (2 units)
+- **Size2**: Secondary grid spacing (8 units)
+
+**Postproduction Exclusion:**
+
+```typescript
+postproduction.customEffects.excludedMeshes.push(worldGrid.three);
+```
+
+The ground grid is excluded from edge rendering to avoid visual clutter.
+
+## Scene Setup
+
+**Source:** main.ts:19-31
+
+### World Creation
+
+```typescript
+const components = new OBC.Components();
+const worlds = components.get(OBC.Worlds);
+
+const world = worlds.create<
+  OBC.SimpleScene,
+  OBC.OrthoPerspectiveCamera,
+  OBF.PostproductionRenderer
+>();
+world.name = "Main";
+
+world.scene = new OBC.SimpleScene(components);
+world.scene.setup();
+world.scene.three.background = null; // Transparent background
+```
+
+**World Components:**
+- **Scene**: `SimpleScene` with basic lighting setup
+- **Camera**: `OrthoPerspectiveCamera` for orthographic/perspective switching
+- **Renderer**: `PostproductionRenderer` with effects pipeline
+
+## Camera Configuration
+
+**Source:** main.ts:90-95
+
+### Camera Controls
+
+```typescript
+world.camera.controls.restThreshold = 0.25;
+world.camera.controls.addEventListener("rest", () => {
+  tilesLoader.cancel = true;
+  tilesLoader.culler.needsUpdate = true;
+});
+```
+
+**Rest Detection:**
+- **Threshold**: 0.25 seconds of inactivity
+- **On Rest**: Cancels ongoing tile loading, triggers culler update
+- **Purpose**: Optimizes streaming by loading tiles only when camera is stable
+
+## Fragment Loading Integration
+
+**Source:** main.ts:97-126
+
+### On Fragments Loaded
+
+```typescript
+fragments.onFragmentsLoaded.add(async (model) => {
+  if (model.hasProperties) {
+    await indexer.process(model);
+    classifier.byEntity(model);
+  }
+
+  if (!model.isStreamed) {
+    for (const fragment of model.items) {
+      world.meshes.add(fragment.mesh);
+    }
+  }
+
+  world.scene.three.add(model);
+
+  if (!model.isStreamed) {
+    setTimeout(async () => {
+      world.camera.fit(world.meshes, 0.8);
+    }, 50);
+  }
+});
+```
+
+**Process:**
+1. **Index Properties**: Process IFC relations if available
+2. **Classify**: Group by entity type
+3. **Add to World**: Register meshes (non-streamed only)
+4. **Add to Scene**: Add model group to Three.js scene
+5. **Fit Camera**: Frame all geometry with 80% padding (50ms delay)
+
+### On Fragments Disposed
+
+```typescript
+fragments.onFragmentsDisposed.add(({ fragmentIDs }) => {
+  for (const fragmentID of fragmentIDs) {
+    const mesh = [...world.meshes].find((mesh) => mesh.uuid === fragmentID);
+    if (mesh) {
+      world.meshes.delete(mesh);
+    }
+  }
+});
+```
+
+**Cleanup:**
+- Removes disposed fragments from world mesh registry
+- Ensures proper memory management
+
+## Streaming Configuration
+
+**Source:** main.ts:77-95
+
+### IFC Streamer Setup
+
+```typescript
+const tilesLoader = components.get(OBF.IfcStreamer);
+tilesLoader.world = world;
+tilesLoader.culler.threshold = 10;
+tilesLoader.culler.maxHiddenTime = 1000;
+tilesLoader.culler.maxLostTime = 40000;
+```
+
+**Culler Parameters:**
+- **Threshold**: 10 units - distance-based culling sensitivity
+- **Max Hidden Time**: 1000ms - keep hidden tiles in memory for 1 second
+- **Max Lost Time**: 40000ms - dispose unseen tiles after 40 seconds
+
+**Purpose:**
+Optimizes performance for large models by:
+- Loading only visible tiles
+- Caching recently viewed tiles
+- Disposing distant tiles to free memory
+
+## Highlighter Configuration
+
+**Source:** main.ts:83-85
+
+```typescript
+const highlighter = components.get(OBF.Highlighter);
+highlighter.setup({ world });
+highlighter.zoomToSelection = true;
+```
+
+**Features:**
+- **World Assignment**: Links highlighter to main 3D world
+- **Zoom to Selection**: Automatically frames selected elements
+- **Event System**: Triggers layout changes via `onHighlight`/`onClear` events
+
+## Layout Best Practices
+
+### Grid Template Syntax
+
+```typescript
+template: `
+  "area1 area2" rowHeight
+  "area3 area4" rowHeight
+  /col1Width col2Width
+`
+```
+
+- **Quoted strings**: Grid area names
+- **After areas**: Row heights
+- **After `/`**: Column widths
+- **Units**: `1fr` (fraction), `auto` (content), `24rem` (fixed)
+
+### Responsive Considerations
+
+1. **Fixed Panel Widths**: Use `rem` units for consistent sizing
+2. **Flexible Viewport**: Use `1fr` to fill available space
+3. **Auto Toolbar Height**: Use `auto` for content-based height
+4. **Floating Grids**: Overlay UI without affecting viewport size
+
+### Performance Tips
+
+1. **Lazy Panel Loading**: Only render element data panel when needed
+2. **Layout Caching**: Pre-define layouts, switch via property assignment
+3. **Event Cleanup**: Remove listeners when layouts change
+4. **Culler Integration**: Sync layout changes with mesh culling updates
+
+## Common Layout Patterns
+
+### Two-Column with Fixed Left
+
+```typescript
+template: `
+  "sidebar content" 1fr
+  /300px 1fr
+`
+```
+
+### Toolbar at Bottom
+
+```typescript
+template: `
+  "main" 1fr
+  "toolbar" auto
+  /1fr
+`
+```
+
+### Three-Column with Panels
+
+```typescript
+template: `
+  "left center right" 1fr
+  /24rem 1fr 24rem
+`
+```
+
+### Header and Content
+
+```typescript
+template: `
+  "header" auto
+  "content" 1fr
+  /1fr
+`
+```
+
+## Example: Custom Layout
+
+Creating a custom viewport layout with split views:
+
+```typescript
+viewportGrid.layouts.split = {
+  template: `
+    "view1 view2" 1fr
+    "toolbar toolbar" auto
+    /1fr 1fr
+  `,
+  elements: {
+    view1: createViewport("Front"),
+    view2: createViewport("Top"),
+    toolbar,
+  },
+};
+
+// Switch to split view
+viewportGrid.layout = "split";
+```
+
+## Viewport Event Handling
+
+### Resize Events
+
+```typescript
+viewport.addEventListener("resize", () => {
+  world.renderer?.resize();
+  world.camera.updateAspect();
+});
+```
+
+### Camera Rest Events
+
+```typescript
+world.camera.controls.addEventListener("rest", () => {
+  // Optimize streaming
+  tilesLoader.culler.needsUpdate = true;
+  
+  // Update UI
+  updateLoadingIndicator(false);
+});
+```
+
+### Selection Events
+
+```typescript
+highlighter.events.select.onHighlight.add((selection) => {
+  viewportGrid.layout = "second";
+});
+
+highlighter.events.select.onClear.add(() => {
+  viewportGrid.layout = "main";
+});
+```
+
+## See Also
+
+- [Panel Components](/api/ui/panels) - UI panel implementation
+- [Toolbar Components](/api/ui/toolbars) - Toolbar sections and tools
+- [AppManager](/api/app-manager) - Global application state and grid management
+- [IFC Viewer](/features/ifc-viewer) - 3D visualization and camera controls

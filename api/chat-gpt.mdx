@@ -1,0 +1,281 @@
+---
+title: ChatGpt
+description: OpenAI GPT integration component for querying IFC file data
+---
+
+## Overview
+
+The `ChatGpt` component provides integration with OpenAI's GPT-3.5 API to enable natural language queries about IFC building data. It processes IFC file content and sends targeted queries to the GPT API with context from the loaded building model.
+
+## Class Definition
+
+```typescript
+export class ChatGpt extends OBC.Component {
+  enabled: boolean = true;
+  static uuid = OBC.UUID.create();
+  fileData: string | null = null;
+
+  constructor(components: OBC.Components) {
+    super(components);
+    components.add(ChatGpt.uuid, this);
+  }
+}
+```
+
+**Location**: `src/bim-components/ChatGpt/index.ts:14`
+
+## Properties
+
+<ParamField path="enabled" type="boolean" default="true">
+  Flag indicating whether the component is active
+</ParamField>
+
+<ParamField path="uuid" type="string" required>
+  Dynamically generated UUID identifier for the component instance
+</ParamField>
+
+<ParamField path="fileData" type="string | null" default="null">
+  Raw IFC file content stored as a string. This data is used as context when querying the GPT API.
+</ParamField>
+
+## Type Definitions
+
+```typescript
+type QuerryData = {
+  message: string
+}
+
+type GptData = {
+  message: string,
+  fileData: string,
+}
+```
+
+**Location**: `src/bim-components/ChatGpt/index.ts:5-12`
+
+## Methods
+
+### getQuerry
+
+Sends a query to the GPT API with IFC file context.
+
+```typescript
+getQuerry = async (data: GptData) => Promise<any>
+```
+
+**Location**: `src/bim-components/ChatGpt/index.ts:30`
+
+<ParamField path="data" type="GptData" required>
+  Object containing the user's message and file data
+  
+  <ParamField path="data.message" type="string" required>
+    The question or query to ask about the IFC file
+  </ParamField>
+  
+  <ParamField path="data.fileData" type="string" required>
+    The IFC file content to use as context
+  </ParamField>
+</ParamField>
+
+<ResponseField name="return" type="Promise<any>">
+  OpenAI API response object containing the GPT-generated answer
+  
+  ```typescript
+  {
+    choices: [{
+      message: {
+        content: string // The GPT response text
+      }
+    }]
+  }
+  ```
+</ResponseField>
+
+**Example**:
+
+```typescript
+const chatGpt = components.get(ChatGpt);
+const response = await chatGpt.getQuerry({
+  message: "How many walls are in this building?",
+  fileData: chatGpt.fileData
+});
+console.log(response.choices[0].message.content);
+```
+
+### sendQuerryToGPT
+
+Internal method that handles the actual HTTP request to OpenAI's API.
+
+```typescript
+sendQuerryToGPT = async (data: GptData) => Promise<any>
+```
+
+**Location**: `src/bim-components/ChatGpt/index.ts:61`
+
+<ParamField path="data" type="GptData" required>
+  Query data including message and file content
+</ParamField>
+
+<ResponseField name="return" type="Promise<any>">
+  Raw OpenAI API response
+</ResponseField>
+
+**Implementation Details**:
+
+```typescript
+const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    model: "gpt-3.5-turbo",
+    messages: [
+      { 
+        role: "system",  
+        content: `Based on the given data answear question about ifc file.
+                You should only create the response based on the information given.
+                Information that is not found on given file should not be presented on the
+                result. PLease answear the questions using as few words as possible`
+      },
+      { 
+        role: "user", 
+        content: `Here is the file content:\n${this.fileData}\n\nNow answer this question: ${message} using only given content` 
+      }
+    ]
+  })
+});
+```
+
+**Source**: `src/bim-components/ChatGpt/index.ts:67-86`
+
+### modifyDataDile
+
+Filters IFC file content to include only relevant entity types, reducing token usage for GPT queries.
+
+```typescript
+modifyDataDile = () => string | undefined
+```
+
+**Location**: `src/bim-components/ChatGpt/index.ts:37`
+
+<ResponseField name="return" type="string | undefined">
+  Filtered IFC file content containing only specified entity types (IFCMATERIAL, IfcRelAssociatesMaterial, IfcBuildingStorey, IfcRelContainedInSpatialStructure, IFCWALL, IFCSLAB, IFCBEAM)
+</ResponseField>
+
+**Filtered Entity Types**:
+
+```typescript
+const validENtities = new Set([
+  "IFCMATERIAL",
+  "IfcRelAssociatesMaterial".toUpperCase(),
+  "IfcBuildingStorey".toUpperCase(),
+  "IfcRelContainedInSpatialStructure".toUpperCase(),
+  "IFCWALL",
+  "IFCSLAB",
+  "IFCBEAM",
+]);
+```
+
+**Source**: `src/bim-components/ChatGpt/index.ts:39-48`
+
+### getModelData
+
+Utility method to access the FragmentsManager (currently for debugging).
+
+```typescript
+getModelData = () => void
+```
+
+**Location**: `src/bim-components/ChatGpt/index.ts:25`
+
+## Usage Example
+
+### Complete Integration
+
+```typescript
+import * as OBC from "@thatopen/components";
+import * as BUI from "@thatopen/ui";
+import { ChatGpt } from "./bim-components/ChatGpt";
+
+// Initialize components
+const components = new OBC.Components();
+const chatGpt = components.get(ChatGpt);
+
+// Load IFC file data (typically done by LoadIfcFile component)
+const reader = new FileReader();
+reader.onload = function(event) {
+  const fileContent = event.target?.result;
+  if (typeof fileContent === "string") {
+    chatGpt.fileData = fileContent;
+  }
+};
+reader.readAsText(ifcFile);
+
+// Query the data
+if (chatGpt.fileData) {
+  const response = await chatGpt.getQuerry({
+    message: "What materials are used in this building?",
+    fileData: chatGpt.fileData
+  });
+  
+  const answer = response.choices[0].message.content;
+  console.log("GPT Answer:", answer);
+}
+```
+
+### UI Integration
+
+From `src/bim-components/ChatGpt/src/user-interface.ts:14-26`:
+
+```typescript
+const onAddClick = async (e: Event) => {
+  const btn = e.target as BUI.Button;
+  const panelSection = btn.closest("bim-panel-section");
+  const querry = panelSection?.value.name;
+  
+  if (!modelData.fileData) {
+    alert("No file data, cant answear");
+    return;
+  }
+  
+  const querryResponse = await modelData.getQuerry({
+    message: querry,
+    fileData: modelData.fileData
+  });
+  
+  textArea.innerText = querryResponse.choices[0].message.content;
+}
+```
+
+## Environment Configuration
+
+The component requires an OpenAI API key to be configured:
+
+```bash
+# .env file
+VITE_OPENAI_API_KEY=sk-your-api-key-here
+```
+
+The API key is accessed via: `import.meta.env.VITE_OPENAI_API_KEY`
+
+**Source**: `src/bim-components/ChatGpt/index.ts:63`
+
+## Dependencies
+
+- `@thatopen/components` - Base component system
+- `@thatopen/ui` - UI components
+- `openai` - OpenAI SDK (imported but not directly used in favor of fetch API)
+
+## Related Components
+
+- [LoadIfcFile](/api/load-ifc-file) - Loads IFC files and populates `fileData`
+- [AppManager](/api/app-manager) - Global application state management
+
+## Notes
+
+- The component uses GPT-3.5-turbo model by default
+- System prompt instructs GPT to only use information from the provided file
+- File content length is logged for debugging token usage
+- The `modifyDataDile` method can reduce file size by ~70-90% by filtering entity types

@@ -1,0 +1,357 @@
+---
+title: OpenAI Setup Guide
+description: Complete guide to setting up OpenAI integration for AI-powered BIM data queries
+---
+
+## Overview
+
+The AI-BIM App integrates OpenAI's GPT models to enable natural language queries over IFC (Industry Foundation Classes) building data. This guide walks you through obtaining an API key, understanding costs, and optimizing your usage.
+
+## Getting an OpenAI API Key
+
+### Step 1: Create an OpenAI Account
+
+1. Visit [OpenAI Platform](https://platform.openai.com)
+2. Sign up for an account or log in
+3. Navigate to the [API Keys page](https://platform.openai.com/api-keys)
+
+### Step 2: Generate an API Key
+
+1. Click **"Create new secret key"**
+2. Name your key (e.g., "AI-BIM App")
+3. Copy the key immediately - you won't be able to see it again
+4. Store it securely
+
+<Warning>
+  API keys are sensitive credentials. Never share them publicly or commit them to version control.
+</Warning>
+
+### Step 3: Configure Your Application
+
+Add your API key to the `.env` file:
+
+```env
+VITE_OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxx
+```
+
+See the [Environment Variables guide](/configuration/environment) for detailed setup instructions.
+
+## Setting Up Billing
+
+### Prepaid Credits
+
+OpenAI operates on a pay-as-you-go model:
+
+1. Go to [Billing Settings](https://platform.openai.com/account/billing)
+2. Click **"Add payment method"**
+3. Add a credit card or set up auto-recharge
+4. Set a usage limit to control costs
+
+<Note>
+  New accounts may receive free credits for testing. Check your dashboard for current promotions.
+</Note>
+
+### Setting Usage Limits
+
+Protect against unexpected charges:
+
+1. Navigate to [Usage Limits](https://platform.openai.com/account/limits)
+2. Set a monthly budget cap
+3. Configure email alerts at specific thresholds (e.g., 50%, 75%, 100%)
+
+## Understanding Token Usage and Costs
+
+### What Are Tokens?
+
+Tokens are pieces of text used for API billing:
+
+- 1 token ≈ 4 characters in English
+- 1 token ≈ ¾ of a word
+- Both input (prompt) and output (response) count toward usage
+
+### Current Model Pricing
+
+The AI-BIM App uses **GPT-3.5 Turbo** by default (`src/bim-components/ChatGpt/index.ts:74`):
+
+| Model | Input Cost | Output Cost |
+|-------|------------|-------------|
+| gpt-3.5-turbo | $0.50 / 1M tokens | $1.50 / 1M tokens |
+| gpt-4-turbo | $10.00 / 1M tokens | $30.00 / 1M tokens |
+| gpt-4 | $30.00 / 1M tokens | $60.00 / 1M tokens |
+
+<Note>
+  Pricing is subject to change. Check [OpenAI's pricing page](https://openai.com/api/pricing/) for current rates.
+</Note>
+
+### Cost Estimation for BIM Queries
+
+Typical IFC file queries in the AI-BIM App:
+
+**File reference:** `src/bim-components/ChatGpt/index.ts:61-92`
+
+The application sends:
+1. System prompt (~50 tokens)
+2. IFC file content (varies, potentially thousands of tokens)
+3. User question (~10-50 tokens)
+
+**Example calculation** for a query with 10,000 token file:
+- Input: ~10,100 tokens = $0.005
+- Output: ~100 tokens = $0.00015
+- **Total per query**: ~$0.005
+
+<Warning>
+  Large IFC files can result in significant token usage. The app processes the entire file content with each query. Monitor your usage dashboard regularly.
+</Warning>
+
+## Model Selection
+
+### GPT-3.5 Turbo (Default)
+
+**Current implementation:** `src/bim-components/ChatGpt/index.ts:74`
+
+```typescript
+model: "gpt-3.5-turbo"
+```
+
+**Characteristics:**
+- Fast response times
+- Cost-effective for high-volume queries
+- Good for straightforward BIM data extraction
+- Context window: 16,385 tokens
+
+**Best for:**
+- Material queries
+- Element counting
+- Simple property lookups
+- Budget-conscious deployments
+
+### GPT-4 and GPT-4 Turbo
+
+For more complex queries, you can modify the model in `src/bim-components/ChatGpt/index.ts:74`:
+
+```typescript
+model: "gpt-4-turbo"  // or "gpt-4"
+```
+
+**Characteristics:**
+- More accurate understanding
+- Better reasoning for complex relationships
+- Higher cost (20-60x more expensive)
+- Context window: 128,000 tokens (gpt-4-turbo)
+
+**Best for:**
+- Complex spatial relationships
+- Multi-step reasoning
+- Large building models
+- Quality-critical applications
+
+## API Implementation Details
+
+### Current API Call Structure
+
+**File reference:** `src/bim-components/ChatGpt/index.ts:67-86`
+
+The application makes direct REST API calls to OpenAI:
+
+```typescript
+const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    model: "gpt-3.5-turbo",
+    messages: [
+      { 
+        role: "system",  
+        content: `Based on the given data answer question about ifc file.
+                You should only create the response based on the information given.
+                Information that is not found on given file should not be presented.
+                Please answer the questions using as few words as possible`
+      },
+      { 
+        role: "user", 
+        content: `Here is the file content:\n${this.fileData}\n\nNow answer this question: ${message} using only given content` 
+      }
+    ]
+  })
+});
+```
+
+### Data Optimization
+
+The app includes file filtering logic (`src/bim-components/ChatGpt/index.ts:37-59`) to reduce token usage:
+
+```typescript
+modifyDataDile = () => {
+  const validENtities = new Set([
+    "IFCMATERIAL",
+    "IfcRelAssociatesMaterial",
+    "IfcBuildingStorey",
+    "IfcRelContainedInSpatialStructure",
+    "IFCWALL",
+    "IFCSLAB",
+    "IFCBEAM",
+  ]);
+  // Filters IFC file to only include relevant entities
+}
+```
+
+<Note>
+  The filtering function is defined but not currently used in queries. Implementing it could significantly reduce costs.
+</Note>
+
+## Best Practices for Prompt Engineering with BIM Data
+
+### System Prompt Optimization
+
+The current system prompt instructs the model to:
+1. Only use provided data
+2. Answer concisely
+3. Not fabricate information
+
+**Improvements you can make:**
+
+```typescript
+role: "system",
+content: `You are a BIM data assistant. Analyze the provided IFC file data and answer questions accurately.
+
+Rules:
+- Only reference data explicitly present in the file
+- Use technical BIM terminology correctly
+- Respond concisely with specific values
+- If information is not found, state "Not found in file data"
+- When counting elements, provide exact numbers
+- Include relevant IFC entity types in responses`
+```
+
+### Query Structure Tips
+
+**Good queries:**
+- "How many IFCWALL elements are in the building?"
+- "List all materials associated with slabs"
+- "What building storeys are defined?"
+- "Count beams on level 2"
+
+**Avoid:**
+- Open-ended questions
+- Requests for design recommendations
+- Queries about data not in IFC files
+- Very complex multi-part questions
+
+### Token Optimization Strategies
+
+1. **Filter file content before sending** (use `modifyDataDile()` method)
+2. **Send only relevant entities** for the query type
+3. **Implement response caching** for repeated queries
+4. **Use shorter system prompts**
+5. **Encourage concise user questions**
+
+### Context Window Management
+
+GPT-3.5 Turbo supports up to 16,385 tokens:
+
+- Reserve ~50 tokens for system prompt
+- Reserve ~50 tokens for user question
+- Reserve ~500 tokens for response
+- Available for IFC data: ~15,785 tokens (~63,000 characters)
+
+<Warning>
+  Large IFC files may exceed context limits. Consider:
+  - Chunking file content
+  - Querying specific sections
+  - Using GPT-4 Turbo (128K context) for large models
+</Warning>
+
+## Monitoring and Debugging
+
+### Usage Dashboard
+
+Track your API usage:
+
+1. Visit [OpenAI Usage Dashboard](https://platform.openai.com/usage)
+2. View token consumption by date
+3. Analyze cost trends
+4. Download usage reports
+
+### Response Logging
+
+The app logs responses to console (`src/bim-components/ChatGpt/index.ts:90`):
+
+```typescript
+console.log("gpt response: ", responseData);
+```
+
+### Error Handling
+
+Common errors:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| 401 Unauthorized | Invalid API key | Check `.env` configuration |
+| 429 Rate limit | Too many requests | Implement rate limiting |
+| 400 Bad request | Invalid parameters | Check model name and formatting |
+| 500 Server error | OpenAI service issue | Retry with exponential backoff |
+
+## Advanced Configuration
+
+### Adding Parameters
+
+You can enhance the API call with additional parameters:
+
+```typescript
+body: JSON.stringify({
+  model: "gpt-3.5-turbo",
+  messages: [...],
+  temperature: 0.3,        // Lower = more deterministic
+  max_tokens: 500,         // Limit response length
+  top_p: 1,                // Nucleus sampling
+  frequency_penalty: 0,    // Reduce repetition
+  presence_penalty: 0      // Encourage diversity
+})
+```
+
+### Recommended Settings for BIM Queries
+
+```typescript
+{
+  temperature: 0.2,      // High accuracy, low creativity
+  max_tokens: 300,       // Concise responses
+  top_p: 0.9            // Focus on high-probability tokens
+}
+```
+
+## Security Considerations
+
+<Warning>
+  The current implementation exposes the API key in client-side code. For production deployments:
+  
+  1. **Implement a backend proxy** to handle OpenAI requests
+  2. **Add authentication** to prevent unauthorized usage
+  3. **Rate limit requests** per user/session
+  4. **Monitor for abuse** via usage dashboards
+  5. **Rotate API keys** regularly
+</Warning>
+
+### Production Architecture Recommendation
+
+```
+Client (Browser)
+    ↓
+Backend API (Your Server)
+    ↓
+OpenAI API
+```
+
+This prevents:
+- API key exposure
+- Unauthorized usage
+- Billing abuse
+- CORS issues
+
+## Related Documentation
+
+- [Environment Variables](/configuration/environment)
+- [ChatGpt Component Reference](/api/chat-gpt)
+- [OpenAI API Documentation](https://platform.openai.com/docs)

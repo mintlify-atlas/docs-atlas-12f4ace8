@@ -1,0 +1,374 @@
+---
+title: Panel Components
+description: UI panel components for displaying project information, element properties, settings, and help resources
+---
+
+The AI-BIM App uses several panel components built with `@thatopen/ui` to organize and display information in the application interface. Panels are integrated into the left sidebar using a tabbed layout.
+
+## Panel Architecture
+
+Panels are created using `BUI.Component.create<BUI.Panel>()` and structured with `<bim-panel-section>` elements. Each panel section can contain tables, forms, buttons, and other UI components.
+
+### Integration in main.ts
+
+```typescript
+const leftPanel = BUI.Component.create(() => {
+  return BUI.html`
+    <bim-tabs switchers-full>
+      <bim-tab name="project" label="Project" icon="ph:building-fill">
+        ${projectInformationPanel}
+      </bim-tab>
+      <bim-tab name="settings" label="Settings" icon="solar:settings-bold">
+        ${settings(components)}
+      </bim-tab>
+      <bim-tab name="help" label="Help" icon="material-symbols:help">
+        ${help}
+      </bim-tab>
+    </bim-tabs> 
+  `;
+});
+```
+
+Reference: main.ts:160-174
+
+## Project Information Panel
+
+**Source:** `src/components/Panels/ProjectInformation.ts`
+
+Displays loaded BIM models and provides AI/Chart analysis tools.
+
+### Structure
+
+```typescript
+export default (components: OBC.Components) => {
+  const [modelsList] = CUI.tables.modelsList({ components });
+  const [relationsTree] = CUI.tables.relationsTree({
+    components,
+    models: [],
+    hoverHighlighterName: "hover",
+    selectHighlighterName: "select",
+  });
+  
+  return BUI.Component.create<BUI.Panel>(() => {
+    return BUI.html`
+      <bim-panel>
+        <bim-panel-section label="Loaded Models" icon="mage:box-3d-fill">
+          ${modelsList}
+        </bim-panel-section>
+        <bim-panel-section label="AI / CHART" icon="mage:box-3d-fill">
+          ${ModalDataUI(components)}
+          ${ChartUI(components)}
+        </bim-panel-section>
+      </bim-panel> 
+    `;
+  });
+};
+```
+
+### Features
+
+- **Models List Table**: Displays all loaded IFC models with management controls
+- **Relations Tree**: Shows IFC spatial structure with filtering capabilities (`preserveStructureOnFilter: true`)
+- **AI Integration**: Modal interface for AI-powered analysis (ChatGPT integration)
+- **Chart Visualization**: Data visualization tools for BIM analytics
+
+### Components Used
+
+- `CUI.tables.modelsList()` - Pre-built table for model management
+- `CUI.tables.relationsTree()` - IFC spatial hierarchy tree
+- `ModalDataUI()` - Custom AI chat interface
+- `ChartUI()` - Custom charting component
+
+## Selection Panel (Element Data)
+
+**Source:** `src/components/Panels/Selection.ts`
+
+Displays properties and attributes of selected BIM elements. Dynamically appears when elements are selected.
+
+### Structure
+
+```typescript
+export default (components: OBC.Components) => {
+  const fragments = components.get(OBC.FragmentsManager);
+  const highlighter = components.get(OBF.Highlighter);
+  const appManager = components.get(AppManager);
+  const viewportGrid = appManager.grids.get("viewport");
+
+  const [propsTable, updatePropsTable] = CUI.tables.elementProperties({
+    components,
+    fragmentIdMap: {},
+  });
+
+  propsTable.preserveStructureOnFilter = true;
+  
+  return BUI.Component.create<BUI.Panel>(() => {
+    return BUI.html`
+      <bim-panel>
+        <bim-panel-section name="selection" label="Selection Information" 
+                          icon="solar:document-bold" fixed>
+          <div style="display: flex; gap: 0.375rem;">
+            <bim-text-input @input=${search} vertical 
+                           placeholder="Search..." debounce="200">
+            </bim-text-input>
+            <bim-button @click=${toggleExpanded} 
+                       icon="eva:expand-fill">
+            </bim-button>
+            <bim-button @click=${() => propsTable.downloadData("ElementData", "tsv")} 
+                       icon="ph:export-fill" 
+                       tooltip-title="Export Data" 
+                       tooltip-text="Export the shown properties to TSV.">
+            </bim-button>
+          </div>
+          ${propsTable}
+        </bim-panel-section>
+      </bim-panel> 
+    `;
+  });
+};
+```
+
+### Dynamic Behavior
+
+The panel automatically shows/hides based on selection state:
+
+```typescript
+highlighter.events.select.onHighlight.add((fragmentIdMap) => {
+  if (!viewportGrid) return;
+  viewportGrid.layout = "second"; // Show element data panel
+  propsTable.expanded = false;
+  updatePropsTable({ fragmentIdMap });
+});
+
+highlighter.events.select.onClear.add(() => {
+  updatePropsTable({ fragmentIdMap: {} });
+  if (!viewportGrid) return;
+  viewportGrid.layout = "main"; // Hide element data panel
+});
+```
+
+Reference: Selection.ts:21-32
+
+### Features
+
+- **Properties Table**: Displays all IFC properties of selected elements
+- **Search Functionality**: Filter properties with 200ms debounce
+- **Expand/Collapse**: Toggle full property tree expansion
+- **Export**: Download element data as TSV format
+- **Auto-cleanup**: Clears on fragment disposal
+
+### Integration
+
+The panel is rendered in the viewport grid's "second" layout:
+
+```typescript
+viewportGrid.layouts = {
+  main: {
+    template: `
+      "empty" 1fr
+      "toolbar" auto
+      /1fr
+    `,
+    elements: { toolbar },
+  },
+  second: {
+    template: `
+      "empty elementDataPanel" 1fr
+      "toolbar elementDataPanel" auto
+      /1fr 24rem
+    `,
+    elements: {
+      toolbar,
+      elementDataPanel,
+    },
+  },
+};
+```
+
+Reference: main.ts:192-212
+
+## Settings Panel
+
+**Source:** `src/components/Panels/Settings.ts`
+
+Provides application configuration options including theme selection and world settings.
+
+### Structure
+
+```typescript
+export default (components: OBC.Components) => {
+  const html = document.querySelector("html")!;
+  const [worldsTable] = CUI.tables.worldsConfiguration({ components });
+  
+  return BUI.Component.create<BUI.Panel>(() => {
+    return BUI.html`
+      <bim-panel>
+        <bim-panel-section label="Aspect" icon="mage:box-3d-fill">
+          <bim-selector vertical @change=${onThemeChange}>
+            <bim-option value="0" label="System" icon="majesticons:laptop">
+            </bim-option>
+            <bim-option value="1" label="Dark" icon="solar:moon-bold">
+            </bim-option>
+            <bim-option value="2" label="Light" icon="solar:sun-bold">
+            </bim-option>
+          </bim-selector>
+        </bim-panel-section>
+        <bim-panel-section label="Worlds" icon="tabler:world">
+          <bim-text-input @input=${onWorldConfigSearch} 
+                         vertical placeholder="Search..." debounce="200">
+          </bim-text-input>
+          <bim-button @click=${() => (worldsTable.expanded = !worldsTable.expanded)} 
+                     icon="eva:expand-fill">
+          </bim-button>
+          ${worldsTable}
+        </bim-panel-section>
+      </bim-panel> 
+    `;
+  });
+};
+```
+
+### Theme Management
+
+```typescript
+const onThemeChange = (event: Event) => {
+  const selector = event.target as BUI.Selector;
+  if (selector.value === 0) {
+    html.classList.remove("bim-ui-dark", "bim-ui-light"); // System
+  } else if (selector.value === 1) {
+    html.className = "bim-ui-dark"; // Dark mode
+  } else if (selector.value === 2) {
+    html.className = "bim-ui-light"; // Light mode
+  }
+};
+```
+
+Reference: Settings.ts:7-20
+
+### Features
+
+- **Theme Selector**: System, Dark, or Light mode with persistent UI classes
+- **Worlds Configuration**: Table displaying all 3D world settings
+- **Search Worlds**: Filter world configuration options
+- **Expand/Collapse**: Toggle world settings table expansion
+
+### Components Used
+
+- `<bim-selector>` - Radio button group for theme selection
+- `CUI.tables.worldsConfiguration()` - Pre-built worlds config table
+- `<bim-text-input>` - Debounced search input (200ms)
+
+## Help Panel
+
+**Source:** `src/components/Panels/Help.ts`
+
+Provides links to That Open Company community and educational resources.
+
+### Structure
+
+```typescript
+export default BUI.Component.create<BUI.Panel>(() => {
+  return BUI.html`
+    <bim-panel>
+      <bim-panel-section fixed label="That Open People at your disposal" 
+                        icon="ic:baseline-people">
+        <bim-label style="white-space: normal;">
+          Feel stuck? Within our community, That Open People, you'll find 
+          all the answers to your doubts...
+        </bim-label>
+        <bim-button @click=${() => open("https://people.thatopen.com/")} 
+                   label="Meet That Open People" 
+                   icon="ic:baseline-people">
+        </bim-button>
+      </bim-panel-section>
+      
+      <bim-panel-section fixed label="Become a BIM Software Developer" 
+                        icon="mdi:university">
+        <bim-label style="white-space: normal;">
+          Want a career change? Enter this new market full of opportunities!...
+        </bim-label>
+        <bim-button @click=${() => open("https://thatopen.com/master")} 
+                   label="Join To Master" 
+                   icon="mdi:university">
+        </bim-button>
+      </bim-panel-section>
+      
+      <bim-panel-section fixed label="Get The Code and Boost your Career" 
+                        icon="material-symbols:code">
+        <bim-label style="white-space: normal;">
+          Eager to succeed? Sign up for Get The Code...
+        </bim-label>
+        <bim-button @click=${() => open("https://thatopen.com/get-the-code")} 
+                   label="Get The Code" 
+                   icon="material-symbols:code">
+        </bim-button>
+      </bim-panel-section>
+    </bim-panel>
+  `;
+});
+```
+
+### Features
+
+- **Static Content**: Fixed panel sections with informational content
+- **External Links**: Opens That Open Company resources in new windows
+- **Community Resources**: Link to That Open People community
+- **Educational Programs**: Links to Master course and Get The Code membership
+
+### Design Notes
+
+- Uses `fixed` attribute on panel sections for consistent layout
+- `white-space: normal` on labels allows text wrapping
+- Each section includes descriptive icon and call-to-action button
+
+## Panel Common Patterns
+
+### Panel Section Structure
+
+```typescript
+<bim-panel-section 
+  label="Section Title" 
+  icon="icon-name" 
+  fixed={optional}>
+  {content}
+</bim-panel-section>
+```
+
+### Search Pattern
+
+Most panels implement debounced search:
+
+```typescript
+const search = (e: Event) => {
+  const input = e.target as BUI.TextInput;
+  table.queryString = input.value;
+};
+
+// In template:
+<bim-text-input @input=${search} placeholder="Search..." debounce="200">
+</bim-text-input>
+```
+
+### Table Expansion Pattern
+
+```typescript
+const toggleExpanded = () => {
+  table.expanded = !table.expanded;
+};
+
+// In template:
+<bim-button @click=${toggleExpanded} icon="eva:expand-fill"></bim-button>
+```
+
+## Best Practices
+
+1. **Preserve Structure**: Set `preserveStructureOnFilter = true` on tables to maintain hierarchy during search
+2. **Debouncing**: Use 200ms debounce on search inputs to avoid excessive filtering
+3. **Event Cleanup**: Remove event listeners when panels are disposed
+4. **Responsive Layout**: Use flex containers with gap spacing for consistent UI
+5. **Icon Consistency**: Use semantic icons that match panel function
+
+## See Also
+
+- [Toolbar Components](/api/ui/toolbars) - Action-based toolbar UI
+- [Viewport System](/api/ui/viewport) - Layout integration and grid management
+- [AppManager](/api/app-manager) - Global application state and grid management

@@ -1,0 +1,721 @@
+---
+title: Toolbar Components
+description: Interactive toolbar sections for model import, camera controls, element selection, and measurements
+---
+
+The AI-BIM App organizes tools into tabbed toolbar sections built with `@thatopen/ui`. Toolbars provide quick access to common operations and are displayed at the bottom of the viewport.
+
+## Toolbar Architecture
+
+Toolbars are structured using `<bim-toolbar-section>` components within a tabbed interface. Each section groups related tools and actions.
+
+### Integration in main.ts
+
+```typescript
+const toolbar = BUI.Component.create(() => {
+  return BUI.html`
+    <bim-tabs floating style="justify-self: center; border-radius: 0.5rem;">
+      <bim-tab label="Import">
+        <bim-toolbar>
+          ${load(components)}
+        </bim-toolbar>
+      </bim-tab>
+      <bim-tab label="Selection">
+        <bim-toolbar>
+          ${camera(world)}
+          ${selection(components, world)}
+        </bim-toolbar>
+      </bim-tab>
+      <bim-tab label="Measurement">
+        <bim-toolbar>
+          ${measurement(world, components)}
+        </bim-toolbar>      
+      </bim-tab>
+    </bim-tabs>
+  `;
+});
+```
+
+Reference: main.ts:131-158
+
+## Import Toolbar
+
+**Source:** `src/components/Toolbars/Sections/Import.ts`
+
+Provides tools for loading BIM models in various formats.
+
+### Structure
+
+```typescript
+export default (components: OBC.Components) => {
+  const [loadBtn] = CUI.buttons.loadIfc({ components });
+  loadBtn.label = "IFC";
+  loadBtn.tooltipTitle = "Load IFC";
+  loadBtn.tooltipText = 
+    "Loads an IFC file into the scene. The IFC gets automatically converted to Fragments.";
+  
+  return BUI.Component.create<BUI.PanelSection>(() => {
+    return BUI.html`
+      <bim-toolbar-section label="Import" icon="solar:import-bold">
+        ${loadBtn}
+        <bim-button @click=${loadFragments} 
+                   label="Fragments" 
+                   icon="fluent:puzzle-cube-piece-20-filled" 
+                   tooltip-title="Load Fragments"
+                   tooltip-text="Loads a pre-converted IFC from a Fragments file...">
+        </bim-button>
+        <bim-button @click=${loadTiles} 
+                   label="Tiles" 
+                   icon="fe:tiled" 
+                   tooltip-title="Load BIM Tiles"
+                   tooltip-text="Loads a pre-converted IFC from a Tiles file to stream the model...">
+        </bim-button>
+      </bim-toolbar-section>
+    `;
+  });
+};
+```
+
+### Load IFC
+
+Uses pre-built button from `@thatopen/ui-obc`:
+
+```typescript
+const [loadBtn] = CUI.buttons.loadIfc({ components });
+```
+
+- Automatically converts IFC to Fragments format
+- Triggers `FragmentsManager.onFragmentsLoaded` event
+- Processes properties and relations through `IfcRelationsIndexer`
+
+### Load Fragments
+
+Loads pre-converted Fragment files from ZIP archives:
+
+```typescript
+const loadFragments = async () => {
+  const fragmentsZip = await askForFile(".zip");
+  if (!fragmentsZip) return;
+  
+  const zipBuffer = await fragmentsZip.arrayBuffer();
+  const zip = new Zip();
+  await zip.loadAsync(zipBuffer);
+  
+  // Extract geometry
+  const geometryBuffer = zip.file("geometry.frag");
+  const geometry = await geometryBuffer.async("uint8array");
+  
+  // Extract properties (optional)
+  let properties: FRAGS.IfcProperties | undefined;
+  const propsFile = zip.file("properties.json");
+  if (propsFile) {
+    const json = await propsFile.async("string");
+    properties = JSON.parse(json);
+  }
+  
+  // Extract relations map (optional)
+  let relationsMap: OBC.RelationsMap | undefined;
+  const relationsMapFile = zip.file("relations-map.json");
+  if (relationsMapFile) {
+    const json = await relationsMapFile.async("string");
+    relationsMap = indexer.getRelationsMapFromJSON(json);
+  }
+  
+  fragments.load(geometry, { properties, relationsMap });
+};
+```
+
+Reference: Import.ts:53-82
+
+**Expected ZIP Contents:**
+- `geometry.frag` (required) - Binary geometry data
+- `properties.json` (optional) - IFC properties
+- `relations-map.json` (optional) - IFC spatial relationships
+
+### Load Tiles
+
+Loads streaming BIM Tiles for large models:
+
+```typescript
+async function loadTiles() {
+  // @ts-ignore - File System Access API
+  const currentDirectory = await window.showDirectoryPicker();
+  
+  let geometryData: any | undefined;
+  let propertiesData: any | undefined;
+  
+  for await (const entry of currentDirectory.values()) {
+    if (geometryFilePattern.test(entry.name)) {
+      const file = await entry.getFile();
+      geometryData = JSON.parse(await file.text());
+    }
+    if (propertiesFilePattern.test(entry.name)) {
+      const file = await entry.getFile();
+      propertiesData = JSON.parse(await file.text());
+    }
+  }
+  
+  if (geometryData) {
+    await streamer.load(geometryData, false, propertiesData);
+  }
+}
+```
+
+Reference: Import.ts:110-148
+
+**File Patterns:**
+- Geometry: `*-processed.json`
+- Properties: `*-processed-properties.json`
+
+### Streamer Configuration
+
+```typescript
+const streamer = components.get(OBF.IfcStreamer);
+streamer.useCache = false; // Disabled for local files
+
+// Custom fetch handler for File System Access API
+streamer.fetch = async (path: string) => {
+  const name = path.substring(path.lastIndexOf("/") + 1);
+  const modelName = getStreamDirName(name);
+  const directory = streamedDirectories[modelName];
+  const fileHandle = await directory.getFileHandle(name);
+  return fileHandle.getFile();
+};
+```
+
+Reference: Import.ts:84-101
+
+## Camera Toolbar
+
+**Source:** `src/components/Toolbars/Sections/Camera.ts`
+
+Controls for camera navigation and locking.
+
+### Structure
+
+```typescript
+export default (world: OBC.World) => {
+  const { camera } = world;
+  
+  return BUI.Component.create<BUI.PanelSection>(() => {
+    return BUI.html`
+      <bim-toolbar-section label="Camera" icon="ph:camera-fill" 
+                          style="pointer-events: auto">
+        <bim-button label="Fit Model" 
+                   icon="material-symbols:fit-screen-rounded" 
+                   @click=${onFitModel}>
+        </bim-button>
+        <bim-button label="Disable" 
+                   icon="tabler:lock-filled" 
+                   @click=${onLock} 
+                   .active=${!camera.enabled}>
+        </bim-button>
+      </bim-toolbar-section>
+    `;
+  });
+};
+```
+
+### Fit Model
+
+Automatically frames all loaded geometry:
+
+```typescript
+const onFitModel = () => {
+  if (camera instanceof OBC.OrthoPerspectiveCamera && world.meshes.size > 0) {
+    camera.fit(world.meshes, 0.5); // 0.5 = 50% padding
+  }
+};
+```
+
+Reference: Camera.ts:7-11
+
+### Lock/Unlock Camera
+
+Toggles camera controls with dynamic button state:
+
+```typescript
+const onLock = (e: Event) => {
+  const button = e.target as BUI.Button;
+  camera.enabled = !camera.enabled;
+  button.active = !camera.enabled;
+  button.label = camera.enabled ? "Disable" : "Enable";
+  button.icon = camera.enabled 
+    ? "tabler:lock-filled" 
+    : "majesticons:unlock-open";
+};
+```
+
+Reference: Camera.ts:13-21
+
+## Selection Toolbar
+
+**Source:** `src/components/Toolbars/Sections/Selection.ts`
+
+Tools for managing element visibility and focus.
+
+### Structure
+
+```typescript
+export default (components: OBC.Components, world?: OBC.World) => {
+  const highlighter = components.get(OBF.Highlighter);
+  const hider = components.get(OBC.Hider);
+  const fragments = components.get(OBC.FragmentsManager);
+  const cullers = components.get(OBC.Cullers);
+  const streamer = components.get(OBF.IfcStreamer);
+  
+  return BUI.Component.create<BUI.PanelSection>(() => {
+    return BUI.html`
+      <bim-toolbar-section label="Selection" icon="ph:cursor-fill">
+        <bim-button @click=${onShowAll} 
+                   label="Show All" 
+                   icon="tabler:eye-filled" 
+                   tooltip-title="Show All" 
+                   tooltip-text="Shows all elements in all models.">
+        </bim-button>
+        <bim-button @click=${onToggleVisibility} 
+                   label="Toggle Visibility" 
+                   icon="tabler:square-toggle" 
+                   tooltip-title="Toggle Visibility" 
+                   tooltip-text="From the current selection, hides visible elements and shows hidden elements.">
+        </bim-button>
+        <bim-button @click=${onIsolate} 
+                   label="Isolate" 
+                   icon="prime:filter-fill" 
+                   tooltip-title="Isolate" 
+                   tooltip-text="Isolates the current selection.">
+        </bim-button>
+        <bim-button @click=${onFocusSelection} 
+                   label="Focus" 
+                   icon="ri:focus-mode" 
+                   tooltip-title="Focus" 
+                   tooltip-text="Focus the camera to the current selection.">
+        </bim-button>
+      </bim-toolbar-section> 
+    `;
+  });
+};
+```
+
+### Show All
+
+Restores visibility to all elements:
+
+```typescript
+const onShowAll = () => {
+  const streamedFragsToShow: FRAGS.FragmentIdMap = {};
+  
+  // Handle static fragments
+  for (const [, fragment] of fragments.list) {
+    if (fragment.group?.isStreamed) {
+      streamedFragsToShow[fragment.id] = new Set(fragment.ids);
+      continue;
+    }
+    
+    fragment.setVisibility(true);
+    const cullers = components.get(OBC.Cullers);
+    for (const [, culler] of cullers.list) {
+      const culled = culler.colorMeshes.get(fragment.id);
+      if (culled) culled.count = fragment.mesh.count;
+    }
+  }
+  
+  // Handle streamed fragments
+  if (Object.keys(streamedFragsToShow).length) {
+    streamer.setVisibility(true, streamedFragsToShow);
+  }
+};
+```
+
+Reference: Selection.ts:104-124
+
+### Toggle Visibility
+
+Inverts visibility state of selected elements:
+
+```typescript
+const onToggleVisibility = () => {
+  const selection = highlighter.selection.select;
+  if (Object.keys(selection).length === 0) return;
+  
+  const meshes = new Set<THREE.InstancedMesh>();
+  const streamedFrags: FRAGS.FragmentIdMap = {};
+  
+  for (const fragmentID in selection) {
+    const fragment = fragments.list.get(fragmentID);
+    if (!fragment) continue;
+    
+    if (fragment.group?.isStreamed) {
+      streamedFrags[fragmentID] = selection[fragmentID];
+      continue;
+    }
+    
+    meshes.add(fragment.mesh);
+    const expressIDs = selection[fragmentID];
+    for (const id of expressIDs) {
+      const isHidden = fragment.hiddenItems.has(id);
+      fragment.setVisibility(isHidden, [id]); // Invert
+    }
+  }
+  
+  if (meshes.size) {
+    cullers.updateInstanced(meshes);
+  }
+  
+  // Handle streamed fragments
+  if (Object.keys(streamedFrags).length) {
+    for (const fragmentID in streamedFrags) {
+      const fragment = fragments.list.get(fragmentID);
+      if (!fragment) continue;
+      const ids = streamedFrags[fragmentID];
+      
+      for (const id of ids) {
+        const isHidden = fragment.hiddenItems.has(id);
+        streamer.setVisibility(isHidden, { [fragment.id]: new Set([id]) });
+      }
+    }
+  }
+};
+```
+
+Reference: Selection.ts:14-56
+
+### Isolate
+
+Hides all elements except the current selection:
+
+```typescript
+const onIsolate = () => {
+  const selection = highlighter.selection.select;
+  if (Object.keys(selection).length === 0) return;
+  
+  const meshes = new Set<THREE.InstancedMesh>();
+  const streamedFragsToHide: FRAGS.FragmentIdMap = {};
+  const streamedFragsToShow: FRAGS.FragmentIdMap = {};
+  const staticFragsToShow: FRAGS.FragmentIdMap = {};
+  
+  // Hide everything first
+  for (const [, fragment] of fragments.list) {
+    if (fragment.group?.isStreamed) {
+      streamedFragsToHide[fragment.id] = new Set(fragment.ids);
+      continue;
+    }
+    fragment.setVisibility(false);
+    meshes.add(fragment.mesh);
+  }
+  
+  // Show selected
+  for (const fragmentID in selection) {
+    const fragment = fragments.list.get(fragmentID);
+    if (!fragment) continue;
+    
+    if (fragment.group?.isStreamed) {
+      streamedFragsToShow[fragmentID] = selection[fragmentID];
+    } else {
+      staticFragsToShow[fragmentID] = selection[fragmentID];
+    }
+  }
+  
+  if (Object.keys(staticFragsToShow).length) {
+    hider.set(true, selection);
+    cullers.updateInstanced(meshes);
+  }
+  
+  if (Object.keys(streamedFragsToHide).length || 
+      Object.keys(streamedFragsToShow).length) {
+    streamer.setVisibility(false, streamedFragsToHide);
+    streamer.setVisibility(true, streamedFragsToShow);
+  }
+};
+```
+
+Reference: Selection.ts:58-102
+
+### Focus Selection
+
+Frames camera to selected elements using bounding sphere:
+
+```typescript
+const onFocusSelection = async () => {
+  if (!world) return;
+  if (!world.camera.hasCameraControls()) return;
+  
+  const bbox = components.get(OBC.BoundingBoxer);
+  bbox.reset();
+  
+  const selected = highlighter.selection.select;
+  if (!Object.keys(selected).length) return;
+  
+  // Calculate bounding box for selection
+  for (const fragID in selected) {
+    const fragment = fragments.list.get(fragID);
+    if (!fragment) continue;
+    const ids = selected[fragID];
+    bbox.addMesh(fragment.mesh, ids);
+  }
+  
+  const sphere = bbox.getSphere();
+  
+  // Validate sphere
+  const { x, y, z } = sphere.center;
+  const isInvalid = 
+    sphere.radius === Infinity || sphere.radius === -Infinity ||
+    x === Infinity || y === Infinity || z === Infinity ||
+    x === -Infinity || y === -Infinity || z === -Infinity ||
+    sphere.radius === 0;
+  
+  if (isInvalid) return;
+  
+  sphere.radius *= 1.2; // 20% padding
+  await world.camera.controls.fitToSphere(sphere, true);
+};
+```
+
+Reference: Selection.ts:126-158
+
+## Measurement Toolbar
+
+**Source:** `src/components/Toolbars/Sections/Measurement.ts`
+
+Provides dimensional measurement tools.
+
+### Structure
+
+```typescript
+export default (world: OBC.World, components: OBC.Components) => {
+  const Edge = components.get(OBF.EdgeMeasurement);
+  const Face = components.get(OBF.FaceMeasurement);
+  const Volume = components.get(OBF.VolumeMeasurement);
+  const Length = components.get(OBF.LengthMeasurement);
+  const Area = components.get(OBF.AreaMeasurement);
+  
+  // Assign world to all measurement tools
+  Edge.world = world;
+  Face.world = world;
+  Volume.world = world;
+  Length.world = world;
+  Area.world = world;
+  
+  return BUI.Component.create<BUI.PanelSection>(() => {
+    return BUI.html`
+      <bim-toolbar-section label="Measurements" 
+                          icon="tdesign:measurement-1" 
+                          style="pointer-events: auto">
+        <bim-checkbox id="measurement-checkbox" 
+                     @change="${onEnabled}" 
+                     label="Enabled" 
+                     icon="material-symbols:fit-screen-rounded">
+        </bim-checkbox>
+        <bim-button @click="${deleteAll}" 
+                   label="Delete all" 
+                   icon="material-symbols:fit-screen-rounded">
+        </bim-button>        
+        ${dropDown}    
+      </bim-toolbar-section>
+    `;
+  });
+};
+```
+
+Reference: Measurement.ts:13-176
+
+### Measurement Types
+
+**Available Tools:**
+- **Edge**: Measure edge lengths on model geometry
+- **Face**: Measure face areas on surfaces
+- **Volume**: Calculate volume from selected fragments
+- **Length**: Create custom length dimensions
+- **Area**: Create custom area measurements
+
+### Dropdown Selector
+
+```typescript
+const dropDown = BUI.Component.create<BUI.Dropdown>(() => {
+  return BUI.html`      
+    <bim-dropdown id="measurement-dropdown" @change="${onToolChanged}">
+      <bim-option label="Edge"></bim-option>
+      <bim-option label="Face"></bim-option>
+      <bim-option label="Volume"></bim-option>
+      <bim-option label="Length"></bim-option>
+      <bim-option label="Area"></bim-option>
+    </bim-dropdown>       
+  `;
+});
+
+dropDown.value = ["Edge"]; // Default selection
+```
+
+Reference: Measurement.ts:153-166
+
+### Tool Activation
+
+```typescript
+const onEnabled = () => {
+  const selected = getSelected();
+  if (!selected) return;
+  
+  tools[selected].enabled = selected;
+  
+  setupEvents();
+  setupHighlighter();
+  setupVolumeEvents();
+};
+
+const onToolChanged = (event: InputEvent) => {
+  const enabled = getEnabled();
+  if (!enabled) return;
+  
+  const target = event.target as BUI.Dropdown;
+  const selected = target.value[0];
+  
+  // Disable all other tools
+  for (const key in tools) {
+    const tool = tools[key];
+    tool.enabled = selected === key;
+  }
+  
+  setupEvents();
+  setupHighlighter();
+  setupVolumeEvents();
+};
+```
+
+Reference: Measurement.ts:121-151
+
+### Measurement Interaction
+
+**Standard Measurements (Edge, Face, Length, Area):**
+- Double-click to create dimension
+- Delete key to remove last dimension
+
+```typescript
+const createDimension = () => {
+  const selected = getSelected();
+  if (!selected) return;
+  tools[selected].create();
+};
+
+const deleteDimension = (event: KeyboardEvent) => {
+  if (event.code === "Delete") {
+    const selected = getSelected();
+    if (!selected) return;
+    tools[selected].delete();
+  }
+};
+
+const setupEvents = () => {
+  const selected = getSelected();
+  const enabled = getEnabled();
+  
+  window.removeEventListener("dblclick", createDimension);
+  window.removeEventListener("keydown", deleteDimension);
+  
+  if (enabled && selected !== "Volume") {
+    window.addEventListener("dblclick", createDimension);
+    window.addEventListener("keydown", deleteDimension);
+  }
+};
+```
+
+Reference: Measurement.ts:60-99
+
+**Volume Measurement:**
+- Automatic calculation on element selection
+- Uses highlighter events
+
+```typescript
+const generateVolume = (frags: FRAGS.FragmentIdMap) => {
+  Volume.getVolumeFromFragments(frags);
+};
+
+const clearVolume = () => {
+  Volume.clear();
+};
+
+const setupVolumeEvents = () => {
+  const selected = getSelected();
+  const enabled = getEnabled();
+  
+  const highlighter = components.get(OBF.Highlighter);
+  highlighter.events.select.onHighlight.remove(generateVolume);
+  highlighter.events.select.onClear.remove(clearVolume);
+  
+  if (enabled && selected === "Volume") {
+    highlighter.events.select.onHighlight.add(generateVolume);
+    highlighter.events.select.onClear.add(clearVolume);
+  }
+};
+```
+
+Reference: Measurement.ts:52-113
+
+### Highlighter Integration
+
+Measurement tools temporarily disable element highlighting:
+
+```typescript
+const setupHighlighter = () => {
+  const enabled = getEnabled();
+  const selected = getSelected();
+  
+  const highlighter = components.get(OBF.Highlighter);
+  // Disable highlighting except for Volume tool
+  highlighter.enabled = !enabled || selected === "Volume";
+};
+```
+
+Reference: Measurement.ts:80-86
+
+## Toolbar Common Patterns
+
+### Toolbar Section Structure
+
+```typescript
+<bim-toolbar-section 
+  label="Section Title" 
+  icon="icon-name" 
+  style="pointer-events: auto">
+  {buttons}
+</bim-toolbar-section>
+```
+
+### Button with Tooltip
+
+```typescript
+<bim-button 
+  @click=${handler} 
+  label="Button Label" 
+  icon="icon-name" 
+  tooltip-title="Tooltip Title"
+  tooltip-text="Detailed description of what this button does.">
+</bim-button>
+```
+
+### Active State Toggle
+
+```typescript
+const onToggle = (e: Event) => {
+  const button = e.target as BUI.Button;
+  someFeature.enabled = !someFeature.enabled;
+  button.active = someFeature.enabled;
+};
+
+// In template:
+<bim-button @click=${onToggle} .active=${someFeature.enabled}></bim-button>
+```
+
+## Best Practices
+
+1. **Pointer Events**: Add `style="pointer-events: auto"` to toolbar sections for proper event handling
+2. **Tool Cleanup**: Remove event listeners when tools are disabled
+3. **Streaming Support**: Always handle both static and streamed fragments separately
+4. **Validation**: Check for valid geometry before camera operations
+5. **Tooltips**: Provide clear tooltips explaining button functionality
+6. **Tool Exclusivity**: Only enable one measurement tool at a time
+
+## See Also
+
+- [Panel Components](/api/ui/panels) - Information display panels
+- [Viewport System](/api/ui/viewport) - Layout and rendering
+- [LoadIfcFile](/api/load-ifc-file) - IFC file loading and fragments

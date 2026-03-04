@@ -1,0 +1,277 @@
+---
+title: Navigating the 3D Viewport
+description: Complete guide to 3D navigation controls and camera tools in AI-BIM App
+---
+
+Master the 3D viewport navigation to efficiently explore and inspect your BIM models.
+
+## Camera Controls Overview
+
+AI-BIM App uses an **OrthoPerspectiveCamera** that supports both perspective and orthographic projection modes. The camera provides intuitive controls for navigating 3D models.
+
+Reference: Camera setup at `/src/main.ts:44`
+
+## Basic Navigation
+
+### Orbit (Rotate)
+Rotate the camera around your model to view it from different angles.
+
+<Steps>
+  <Step title="Left Mouse Button">
+    Click and hold the left mouse button, then drag to rotate the camera around the model center point.
+  </Step>
+
+  <Step title="Free Rotation">
+    Move the mouse in any direction to orbit horizontally and vertically around the model.
+  </Step>
+
+  <Step title="Release to Stop">
+    Release the mouse button to stop rotating. The camera will continue with slight momentum.
+  </Step>
+</Steps>
+
+### Pan (Move)
+Move the camera parallel to the view plane without rotating.
+
+<Steps>
+  <Step title="Right Mouse Button or Middle Button">
+    Click and hold the right mouse button (or middle mouse button), then drag to pan the view.
+  </Step>
+
+  <Step title="Shift + Left Click (Alternative)">
+    Hold the Shift key and drag with the left mouse button to pan.
+  </Step>
+
+  <Step title="Position the View">
+    Pan to center specific areas of interest in your viewport.
+  </Step>
+</Steps>
+
+### Zoom
+Move the camera closer to or farther from the model.
+
+<Steps>
+  <Step title="Scroll Wheel">
+    Roll the mouse wheel forward to zoom in, or backward to zoom out.
+  </Step>
+
+  <Step title="Pinch Gesture (Touchpad)">
+    Use two-finger pinch gestures on touchpads to zoom smoothly.
+  </Step>
+
+  <Step title="Focus on Point">
+    The camera zooms toward the point under your cursor for precise control.
+  </Step>
+</Steps>
+
+## Camera Toolbar
+
+Access advanced camera controls from the **Selection** tab in the floating toolbar.
+
+Reference: Camera controls at `/src/components/Toolbars/Sections/Camera.ts:7`
+
+### Fit Model to View
+
+Automatically frame the entire model in the viewport.
+
+<Steps>
+  <Step title="Click Fit Model Button">
+    In the Camera section of the Selection toolbar, click the **Fit Model** button.
+  </Step>
+
+  <Step title="Camera Adjusts Automatically">
+    The camera calculates the optimal position and zoom level to show all visible elements.
+  </Step>
+
+  <Step title="0.5 Padding Applied">
+    A 50% padding ensures the model doesn't fill the entire screen, providing visual breathing room.
+  </Step>
+</Steps>
+
+Reference: `onFitModel` function at `/src/components/Toolbars/Sections/Camera.ts:7`
+
+<Tip>
+  Use **Fit Model** after loading a new file or after hiding/showing elements to reset your view.
+</Tip>
+
+### Lock/Unlock Camera
+
+Freeze camera movement to prevent accidental navigation changes.
+
+<Steps>
+  <Step title="Click Disable Button">
+    In the Camera section, click the **Disable** button (shows a lock icon).
+  </Step>
+
+  <Step title="Camera Locked">
+    All camera controls are disabled. The button changes to **Enable** with an unlock icon.
+  </Step>
+
+  <Step title="Click Enable to Unlock">
+    Click again to restore camera controls.
+  </Step>
+</Steps>
+
+Reference: `onLock` function at `/src/components/Toolbars/Sections/Camera.ts:13`
+
+<Tip>
+  Lock the camera when taking screenshots or when you need to click UI elements without accidentally moving the view.
+</Tip>
+
+## Advanced Navigation Techniques
+
+### Focus on Selection
+
+Zoom the camera to selected elements for detailed inspection.
+
+<Steps>
+  <Step title="Select Elements">
+    Click elements in the viewport to select them (they will be highlighted).
+  </Step>
+
+  <Step title="Click Focus Button">
+    In the Selection toolbar, click the **Focus** button.
+  </Step>
+
+  <Step title="Camera Moves to Selection">
+    The camera smoothly transitions to frame your selected elements with a 20% boundary.
+  </Step>
+</Steps>
+
+Reference: `onFocusSelection` function at `/src/components/Toolbars/Sections/Selection.ts:126`
+
+### Viewport Rest Threshold
+
+The camera system includes intelligent rest detection:
+
+- When the camera stops moving for **0.25 seconds**, it triggers rest events
+- This optimizes rendering and streaming performance
+- Tile loading is optimized during camera rest periods
+
+Reference: Camera rest threshold at `/src/main.ts:90`
+
+## Projection Modes
+
+The camera supports two projection modes:
+
+### Perspective Mode
+- Objects farther away appear smaller (realistic view)
+- Better for understanding spatial relationships
+- Default mode for architectural visualization
+
+### Orthographic Mode
+- Parallel projection with no perspective distortion
+- Objects maintain size regardless of distance
+- Ideal for measurements and technical drawings
+
+<Note>
+  Projection mode switching is currently implemented in the camera system but may need to be enabled in the UI. Check the Camera toolbar for a dropdown to switch modes.
+</Note>
+
+## Viewport Grid
+
+The viewport includes a world grid to help with orientation:
+
+- Grid color: Dark gray (`#424242`)
+- Primary grid size: 2 units
+- Secondary grid size: 8 units
+- Grid follows camera movement
+
+Reference: Grid configuration at `/src/main.ts:46`
+
+## Selection and Highlighting
+
+The viewport includes an integrated highlighter system:
+
+### Click to Select
+<Steps>
+  <Step title="Click an Element">
+    Click any element in the 3D view to select it.
+  </Step>
+
+  <Step title="Element Highlights">
+    Selected elements are highlighted with visual emphasis.
+  </Step>
+
+  <Step title="View Properties">
+    Element properties appear in the right panel when selected.
+  </Step>
+</Steps>
+
+### Zoom to Selection
+When **zoomToSelection** is enabled (default), clicking an element automatically adjusts the camera to focus on it.
+
+Reference: Highlighter setup at `/src/main.ts:84`
+
+## Performance Optimization
+
+### Culling System
+AI-BIM App uses an automatic culling system that:
+- Hides objects outside the camera view
+- Improves performance for large models
+- Updates automatically during camera rest
+
+Reference: Culler setup at `/src/main.ts:87`
+
+### Streaming for Large Models
+For models loaded as BIM Tiles:
+- Elements stream in based on camera position
+- Visible tiles load automatically
+- Hidden elements unload to save memory
+- 10-second threshold for tile visibility
+
+Reference: Tile streamer configuration at `/src/main.ts:77`
+
+## Navigation Tips
+
+<Tip>
+  **Double-click** an element to both select it and zoom to it in one action.
+</Tip>
+
+<Tip>
+  Hold **Shift** while orbiting to rotate around the point under your cursor instead of the model center.
+</Tip>
+
+<Tip>
+  For large models, wait for the camera to rest before zooming in further - this allows tiles to load fully.
+</Tip>
+
+<Tip>
+  Use **Show All** from the Selection toolbar to reveal all hidden elements and reset visibility.
+</Tip>
+
+## Troubleshooting Navigation
+
+### Camera Won't Move
+- Check if the camera is locked (lock button shows in Camera toolbar)
+- Ensure you're clicking in the viewport, not on UI elements
+- Try clicking **Enable** in the Camera section
+
+### Model Disappeared
+- Use **Fit Model** to reset the camera view
+- Check if elements are hidden (use **Show All** in Selection toolbar)
+- Zoom out significantly - you might be inside the model
+
+### Navigation Feels Slow
+- Large models may have performance constraints
+- Close unnecessary browser tabs to free memory
+- Consider using BIM Tiles for better streaming performance
+
+### Can't Select Elements
+- Ensure the highlighter is enabled (check Settings panel)
+- Measurement tools may interfere - disable them in the Measurement tab
+- Some fragments may not be selectable if they lack geometry
+
+## Keyboard Shortcuts
+
+While most navigation is mouse-based, some useful shortcuts include:
+
+- **Delete** - Delete selected measurements (when measurement mode is active)
+- **Shift + Drag** - Pan view with left mouse button
+
+## Next Steps
+
+Now that you can navigate the 3D viewport:
+- Learn to [use measurement tools](/guide/measurements)
+- Start [querying with AI](/guide/querying-with-ai)
+- Explore [data visualization](/guide/analyzing-data)

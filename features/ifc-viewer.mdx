@@ -1,0 +1,332 @@
+---
+title: 3D IFC Viewer
+description: Explore BIM models with our advanced 3D IFC viewer powered by Three.js and ThatOpen Components
+icon: cube
+---
+
+## Overview
+
+The AI-BIM App features a powerful 3D IFC viewer that enables you to visualize and navigate Industry Foundation Classes (IFC) building models in your browser. Built on Three.js and ThatOpen Components, the viewer provides professional-grade rendering and interaction capabilities.
+
+## Core Technologies
+
+The IFC viewer leverages several cutting-edge technologies:
+
+- **Three.js**: High-performance 3D graphics rendering
+- **ThatOpen Components (@thatopen/components)**: BIM-specific functionality and IFC processing
+- **ThatOpen Components Front (@thatopen/components-front)**: Advanced rendering features
+- **web-ifc**: Native IFC file parsing
+
+## Camera System
+
+The viewer implements a flexible dual-camera system that adapts to different visualization needs.
+
+### OrthoPerspectiveCamera
+
+The app uses the `OBC.OrthoPerspectiveCamera` which supports both orthographic and perspective projections:
+
+<CodeGroup>
+```typescript main.ts:44
+world.camera = new OBC.OrthoPerspectiveCamera(components);
+```
+</CodeGroup>
+
+### Camera Controls
+
+<CardGroup cols={2}>
+  <Card title="Fit Model" icon="maximize">
+    Automatically frames all loaded models in the viewport with optimal zoom level (0.8x padding)
+  </Card>
+  
+  <Card title="Lock/Unlock" icon="lock">
+    Toggle camera controls on/off to prevent accidental navigation changes
+  </Card>
+  
+  <Card title="Focus Selection" icon="crosshairs">
+    Zoom camera to focus on currently selected elements with 1.2x radius padding
+  </Card>
+  
+  <Card title="Rest Detection" icon="hand">
+    Camera detects when movement stops (0.25 threshold) to trigger optimizations
+  </Card>
+</CardGroup>
+
+## Rendering Engine
+
+### PostproductionRenderer
+
+The viewer uses an advanced `PostproductionRenderer` that provides enhanced visual quality through post-processing effects:
+
+<CodeGroup>
+```typescript main.ts:41-63
+world.renderer = new OBF.PostproductionRenderer(components, viewport);
+const { postproduction } = world.renderer;
+
+postproduction.enabled = true;
+postproduction.customEffects.excludedMeshes.push(worldGrid.three);
+postproduction.setPasses({ custom: true, ao: true, gamma: true });
+postproduction.customEffects.lineColor = 0x17191c;
+```
+</CodeGroup>
+
+### Post-Processing Effects
+
+<AccordionGroup>
+  <Accordion title="Custom Effects">
+    Enables custom post-processing pipeline for enhanced visual quality. Line rendering uses dark color (0x17191c) for edge detection.
+  </Accordion>
+  
+  <Accordion title="Ambient Occlusion (AO)">
+    Adds realistic shadows in corners and crevices where ambient light is occluded, enhancing depth perception.
+  </Accordion>
+  
+  <Accordion title="Gamma Correction">
+    Ensures accurate color representation by correcting the gamma curve for proper display output.
+  </Accordion>
+</AccordionGroup>
+
+## Scene Configuration
+
+The viewer creates a complete world environment with scene, camera, and renderer:
+
+<CodeGroup>
+```typescript main.ts:22-31
+const world = worlds.create<
+  OBC.SimpleScene,
+  OBC.OrthoPerspectiveCamera,
+  OBF.PostproductionRenderer
+>();
+world.name = "Main";
+
+world.scene = new OBC.SimpleScene(components);
+world.scene.setup();
+world.scene.three.background = null;
+```
+</CodeGroup>
+
+### World Grid
+
+A customizable grid system helps with spatial orientation:
+
+<CodeGroup>
+```typescript main.ts:46-49
+const worldGrid = components.get(OBC.Grids).create(world);
+worldGrid.material.uniforms.uColor.value = new THREE.Color(0x424242);
+worldGrid.material.uniforms.uSize1.value = 2;
+worldGrid.material.uniforms.uSize2.value = 8;
+```
+</CodeGroup>
+
+- **Grid Color**: Dark gray (0x424242) for subtle background reference
+- **Primary Grid Size**: 2 units
+- **Secondary Grid Size**: 8 units
+
+## IFC Loading
+
+### Supported Loading Methods
+
+The viewer supports multiple ways to load IFC models:
+
+<Steps>
+  <Step title="Standard IFC Loading">
+    Load complete IFC files using the `IfcLoader` component. Files are parsed, processed, and rendered in the 3D scene.
+  </Step>
+  
+  <Step title="Streaming IFC Loading">
+    For large models, the `IfcStreamer` loads geometry progressively with level-of-detail (LOD) optimization.
+  </Step>
+</Steps>
+
+### IFC Loader Configuration
+
+<CodeGroup>
+```typescript main.ts:74-75
+const ifcLoader = components.get(OBC.IfcLoader);
+await ifcLoader.setup();
+```
+</CodeGroup>
+
+### IFC Streamer for Large Models
+
+The streaming loader optimizes performance for large buildings:
+
+<CodeGroup>
+```typescript main.ts:77-81
+const tilesLoader = components.get(OBF.IfcStreamer);
+tilesLoader.world = world;
+tilesLoader.culler.threshold = 10;
+tilesLoader.culler.maxHiddenTime = 1000;
+tilesLoader.culler.maxLostTime = 40000;
+```
+</CodeGroup>
+
+<Info>
+  **Performance Optimization**: The culler automatically hides geometry outside the viewport with a threshold of 10 units, hiding objects after 1 second and removing them from memory after 40 seconds.
+</Info>
+
+## Model Processing Pipeline
+
+When an IFC model is loaded, the system automatically processes it through several stages:
+
+<CodeGroup>
+```typescript main.ts:97-117
+fragments.onFragmentsLoaded.add(async (model) => {
+  if (model.hasProperties) {
+    await indexer.process(model);
+    classifier.byEntity(model);
+  }
+
+  if (!model.isStreamed) {
+    for (const fragment of model.items) {
+      world.meshes.add(fragment.mesh);
+    }
+  }
+
+  world.scene.three.add(model);
+
+  if (!model.isStreamed) {
+    setTimeout(async () => {
+      world.camera.fit(world.meshes, 0.8);
+    }, 50);
+  }
+});
+```
+</CodeGroup>
+
+<Steps>
+  <Step title="Property Indexing">
+    The `IfcRelationsIndexer` processes the model to extract IFC relationships and properties for quick access.
+  </Step>
+  
+  <Step title="Entity Classification">
+    The `Classifier` organizes elements by their IFC entity types (walls, slabs, beams, etc.).
+  </Step>
+  
+  <Step title="Mesh Registration">
+    All fragment meshes are added to the world for rendering and interaction.
+  </Step>
+  
+  <Step title="Auto-Framing">
+    The camera automatically fits to show the entire model after a 50ms delay.
+  </Step>
+</Steps>
+
+## Supported IFC Types
+
+The viewer processes and displays all standard IFC entity types, with special handling for:
+
+<CardGroup cols={3}>
+  <Card title="Structural Elements" icon="building">
+    - IFCWALL / IFCWALLSTANDARDCASE
+    - IFCSLAB
+    - IFCBEAM
+    - IFCCOLUMN
+  </Card>
+  
+  <Card title="Spatial Structure" icon="layer-group">
+    - IFCBUILDINGSTOREY
+    - IFCBUILDING
+    - IFCSITE
+    - IFCSPACE
+  </Card>
+  
+  <Card title="Materials & Properties" icon="palette">
+    - IFCMATERIAL
+    - IFCPROPERTYSET
+    - IFCELEMENTQUANTITY
+    - IFCRELASSOCIATESMATERIAL
+  </Card>
+</CardGroup>
+
+## Performance Optimization
+
+### Culling System
+
+The viewer implements frustum culling to improve performance:
+
+<CodeGroup>
+```typescript main.ts:87-95
+const culler = components.get(OBC.Cullers).create(world);
+
+world.camera.controls.restThreshold = 0.25;
+world.camera.controls.addEventListener("rest", () => {
+  tilesLoader.cancel = true;
+  tilesLoader.culler.needsUpdate = true;
+});
+```
+</CodeGroup>
+
+<Tip>
+  The culling system only updates when the camera stops moving (rest threshold: 0.25), reducing unnecessary computations during navigation.
+</Tip>
+
+### Responsive Viewport
+
+The viewer automatically adjusts to window size changes:
+
+<CodeGroup>
+```typescript main.ts:51-56
+const resizeWorld = () => {
+  world.renderer?.resize();
+  world.camera.updateAspect();
+};
+
+viewport.addEventListener("resize", resizeWorld);
+```
+</CodeGroup>
+
+## Navigation Controls
+
+The viewer provides intuitive navigation similar to professional CAD applications:
+
+<CardGroup cols={2}>
+  <Card title="Orbit" icon="rotate">
+    **Left Mouse Drag**: Rotate the camera around the model center
+  </Card>
+  
+  <Card title="Pan" icon="arrows-up-down-left-right">
+    **Right Mouse Drag** or **Middle Mouse Drag**: Move the camera parallel to the view plane
+  </Card>
+  
+  <Card title="Zoom" icon="magnifying-glass">
+    **Mouse Wheel**: Zoom in and out relative to the cursor position
+  </Card>
+  
+  <Card title="Fit View" icon="expand">
+    **Fit Model Button**: Automatically frame all models in the viewport
+  </Card>
+</CardGroup>
+
+## Visual Quality Features
+
+<CardGroup cols={2}>
+  <Card title="High-Resolution Rendering" icon="eye">
+    Native WebGL rendering with anti-aliasing for smooth edges and professional appearance
+  </Card>
+  
+  <Card title="Realistic Lighting" icon="lightbulb">
+    Ambient occlusion simulates realistic soft shadows in model crevices and corners
+  </Card>
+  
+  <Card title="Edge Detection" icon="border-all">
+    Custom edge rendering highlights model geometry for better clarity
+  </Card>
+  
+  <Card title="Transparent Background" icon="droplet">
+    Clean visualization with null background allows focus on the model
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Warning>
+  **File Size Considerations**: For IFC files larger than 100MB, use the streaming loader for optimal performance. The standard loader works best for files under 50MB.
+</Warning>
+
+<Tip>
+  **Navigation Tip**: Use the "Fit Model" button after loading a new IFC file to ensure the entire model is visible in the viewport.
+</Tip>
+
+<Note>
+  The viewer automatically processes IFC properties and relationships in the background, enabling advanced features like element selection and AI analysis.
+</Note>
