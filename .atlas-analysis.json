@@ -1,0 +1,92 @@
+{
+  "projectType": "saas",
+  "projectName": "AI-BIM App",
+  "projectDescription": "A web-based Building Information Modeling application enhanced with AI-powered querying and analysis capabilities for IFC files.",
+  "theme": "aspen",
+  "primaryColor": "#0066CC",
+  "lightColor": "#3399FF",
+  "darkColor": "#004C99",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/ifc-viewer",
+              "features/ai-assistant",
+              "features/data-visualization",
+              "features/element-selection"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guide/loading-models",
+              "guide/navigating-3d",
+              "guide/querying-with-ai",
+              "guide/analyzing-data",
+              "guide/measurements"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/openai-setup"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Components",
+            "pages": [
+              "api/app-manager",
+              "api/chat-gpt",
+              "api/load-ifc-file",
+              "api/chart-data"
+            ]
+          },
+          {
+            "group": "UI Components",
+            "pages": [
+              "api/ui/panels",
+              "api/ui/toolbars",
+              "api/ui/viewport"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "3D IFC model visualization with Three.js",
+    "AI-powered building data querying using OpenAI GPT",
+    "Interactive element selection and inspection",
+    "Chart-based data visualization for building elements",
+    "Material and property analysis",
+    "Building level (storey) navigation",
+    "Measurement and camera tools"
+  ],
+  "publicApiSurface": [
+    "AppManager - Global application state and grid management",
+    "ChatGpt - AI query interface for IFC data",
+    "LoadIfcFile - IFC file loading and parsing",
+    "ChartData - Building element data visualization and analytics",
+    "getPropertiesOfSpecificLevel() - Extract properties by building level",
+    "getAllEntitiesOfType() - Query elements by IFC type",
+    "sendQuerryToGPT() - Send questions to AI assistant"
+  ]
+}
